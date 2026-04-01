@@ -24,9 +24,9 @@ const pageFormats = {
 const MM_PER_INCH = 25.4;
 
 const exportQualityPresets = {
-  standard: { dpi: 160, minScale: 2, maxScale: 4, jpegQuality: 0.9, pdfImageType: "JPEG" },
-  high: { dpi: 220, minScale: 2.5, maxScale: 6, jpegQuality: 0.96, pdfImageType: "PNG" },
-  print: { dpi: 300, minScale: 3, maxScale: 8, jpegQuality: 1, pdfImageType: "PNG" }
+  standard: { dpi: 150, jpegQuality: 0.88, pdfImageType: "JPEG" },
+  high:     { dpi: 220, jpegQuality: 0.95, pdfImageType: "PNG" },
+  print:    { dpi: 300, jpegQuality: 1.00, pdfImageType: "PNG" }
 };
 
 let currentTemplate = null;
@@ -360,7 +360,7 @@ function createInput(field) {
     const div = document.createElement("div");
     div.className = "insert-element";
     div.style.color = field.fillColor || "#f3ca62";
-    div.textContent = "★";
+    div.textContent = "â˜…";
     return div;
   }
 
@@ -368,7 +368,7 @@ function createInput(field) {
     const div = document.createElement("div");
     div.className = "insert-element";
     div.style.color = field.fillColor || "#93b9ad";
-    div.textContent = "➜";
+    div.textContent = "âžœ";
     return div;
   }
 
@@ -561,7 +561,7 @@ function createInput(field) {
         hiddenInput.value = i;
       });
       const star = document.createElement("span");
-      star.textContent = "★";
+      star.textContent = "â˜…";
       label.appendChild(input);
       label.appendChild(star);
       wrap.appendChild(label);
@@ -901,237 +901,383 @@ function getRenderableEntries(response) {
   return entries;
 }
 
-function createSnapshotSheet(response, targetWidth, targetHeight) {
-  const baseWidth = Math.max(1, sheetEl.clientWidth || 794);
+// Capture inline styles the user applied via Essential Tools on the fill sheet
+function captureInputStyles() {
+  const styles = {};
+  if (!currentTemplate) return styles;
+  currentTemplate.fields.forEach((field) => {
+    const el = sheetEl.querySelector(`[name="${CSS.escape(field.id)}"]`);
+    if (!el) return;
+    const s = el.style;
+    const captured = {};
+    if (s.fontSize)      captured.fontSize      = parseInt(s.fontSize, 10) || field.fontSize;
+    if (s.fontWeight)    captured.fontWeight    = s.fontWeight;
+    if (s.fontStyle)     captured.fontStyle     = s.fontStyle;
+    if (s.textDecoration) captured.textDecoration = s.textDecoration;
+    if (s.textAlign)     captured.textAlign     = s.textAlign;
+    if (Object.keys(captured).length) styles[field.id] = captured;
+  });
+  return styles;
+}
+
+// Canvas 2D helper â€” rounded rectangle path
+function ctxRoundRect(ctx, x, y, w, h, r) {
+  const r2 = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r2, y);
+  ctx.lineTo(x + w - r2, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r2);
+  ctx.lineTo(x + w, y + h - r2);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r2, y + h);
+  ctx.lineTo(x + r2, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r2);
+  ctx.lineTo(x, y + r2);
+  ctx.quadraticCurveTo(x, y, x + r2, y);
+  ctx.closePath();
+}
+
+// Canvas 2D helper â€” load and draw an image with cover/contain fit
+function drawImageToCanvas(ctx, src, x, y, w, h, fit, radius) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      ctx.save();
+      if (radius > 0) { ctxRoundRect(ctx, x, y, w, h, radius); ctx.clip(); }
+      const nw = img.naturalWidth || 1;
+      const nh = img.naturalHeight || 1;
+      const s = fit === "cover" ? Math.max(w / nw, h / nh) : Math.min(w / nw, h / nh);
+      ctx.drawImage(img, x + (w - nw * s) / 2, y + (h - nh * s) / 2, nw * s, nh * s);
+      ctx.restore();
+      resolve();
+    };
+    img.onerror = () => resolve();
+    img.src = src;
+  });
+}
+
+// Pure Canvas 2D renderer â€” replaces html2canvas entirely.
+// Draws every field directly at the target pixel dimensions for full DPI quality.
+async function renderFormToCanvas(response, widthPx, heightPx, inputStyles) {
+  const canvas = document.createElement("canvas");
+  canvas.width  = widthPx;
+  canvas.height = heightPx;
+  const ctx = canvas.getContext("2d");
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, widthPx, heightPx);
+
+  const baseWidth  = Math.max(1, sheetEl.clientWidth  || 794);
   const baseHeight = Math.max(1, sheetEl.clientHeight || 1123);
-  const width = targetWidth || baseWidth;
-  const height = targetHeight || baseHeight;
-  const scaleX = width / baseWidth;
-  const scaleY = height / baseHeight;
+  const scaleX = widthPx  / baseWidth;
+  const scaleY = heightPx / baseHeight;
+  const scale  = Math.min(scaleX, scaleY);
 
-  const snapshot = document.createElement("div");
-  snapshot.className = "sheet fill-sheet";
-  snapshot.style.boxShadow = "none";
-  snapshot.style.background = "#ffffff";
-  snapshot.style.width = `${width}px`;
-  snapshot.style.height = `${height}px`;
-  snapshot.style.position = "relative";
-  snapshot.style.overflow = "hidden";
+  for (const { field, row } of getRenderableEntries(response)) {
+    // Merge live essential-tool overrides into the field definition
+    const ef = { ...field, ...(inputStyles?.[field.id] || {}) };
 
-  const entries = getRenderableEntries(response);
+    const fx = Math.round((Number(ef.x) || 0) * scaleX);
+    const fy = Math.round((Number(ef.y) || 0) * scaleY);
+    const fw = Math.round((Number(ef.w) || 160) * scaleX);
+    const fh = Math.round((Number(ef.h) || 60)  * scaleY);
 
-  if (!entries.length) {
-    const empty = document.createElement("div");
-    empty.className = "filler-empty";
-    empty.textContent = "No filled values to export.";
-    snapshot.appendChild(empty);
-    return snapshot;
-  }
+    ctx.save();
+    if (typeof ef.rotate === "number" && ef.rotate !== 0) {
+      ctx.translate(fx + fw / 2, fy + fh / 2);
+      ctx.rotate((ef.rotate * Math.PI) / 180);
+      ctx.translate(-(fx + fw / 2), -(fy + fh / 2));
+    }
+    ctx.globalAlpha = typeof ef.opacity === "number" ? ef.opacity / 100 : 1;
+    ctx.beginPath(); ctx.rect(fx, fy, fw, fh); ctx.clip();
 
-  entries.forEach(({ field, row }) => {
-    const block = document.createElement("div");
-    block.className = `export-object ${field.type}`;
-    block.style.left = `${(Number(field.x) || 0) * scaleX}px`;
-    block.style.top = `${(Number(field.y) || 0) * scaleY}px`;
-    block.style.width = `${(Number(field.w) || 160) * scaleX}px`;
-    block.style.height = `${(Number(field.h) || 60) * scaleY}px`;
-    block.style.fontSize = `${Math.max(10, 14 * Math.min(scaleX, scaleY))}px`;
-    block.style.lineHeight = "1.35";
+    if (ef.type === "shaperect") {
+      const sw = Math.max(1, Math.round((Number(ef.strokeWidth) || 1) * scale));
+      ctx.fillStyle = ef.fillColor || "#dff1eb";
+      ctxRoundRect(ctx, fx, fy, fw, fh, Number(ef.radius) || 0); ctx.fill();
+      ctx.strokeStyle = ef.strokeColor || "#3b7f71"; ctx.lineWidth = sw;
+      ctxRoundRect(ctx, fx, fy, fw, fh, Number(ef.radius) || 0); ctx.stroke();
 
-    if (field.type === "photo") {
-      const firstImage = row.images?.[0]?.dataUrl;
-      if (firstImage) {
-        const img = document.createElement("img");
-        img.src = firstImage;
-        img.alt = row.images?.[0]?.name || "photo";
-        block.appendChild(img);
+    } else if (ef.type === "shapecircle") {
+      const sw = Math.max(1, Math.round((Number(ef.strokeWidth) || 1) * scale));
+      ctx.fillStyle = ef.fillColor || "#f8ead9";
+      ctx.beginPath(); ctx.ellipse(fx + fw/2, fy + fh/2, fw/2, fh/2, 0, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = ef.strokeColor || "#ba7a36"; ctx.lineWidth = sw; ctx.stroke();
+
+    } else if (ef.type === "shapeline") {
+      const lh = Math.max(1, Math.round((Number(ef.strokeWidth) || 2) * scale));
+      ctx.fillStyle = ef.strokeColor || "#4f6f67";
+      ctx.fillRect(fx, fy + fh/2 - lh/2, fw, lh);
+
+    } else if (ef.type === "divider") {
+      const lh = Math.max(1, Math.round(2 * scale));
+      ctx.fillStyle = "#9fb7af";
+      ctx.fillRect(fx, fy + fh/2 - lh/2, fw, lh);
+
+    } else if (ef.type === "elementstar") {
+      const fs = Math.max(20, Math.round(Math.min(fw, fh) * 0.85));
+      ctx.font = `${fs}px Arial`; ctx.fillStyle = ef.fillColor || "#f3ca62";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("â˜…", fx + fw/2, fy + fh/2);
+
+    } else if (ef.type === "elementarrow") {
+      const fs = Math.max(18, Math.round(Math.min(fw, fh) * 0.75));
+      ctx.font = `${fs}px Arial`; ctx.fillStyle = ef.fillColor || "#93b9ad";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("âžœ", fx + fw/2, fy + fh/2);
+
+    } else if (ef.type === "image" && ef.imageSrc) {
+      await drawImageToCanvas(ctx, ef.imageSrc, fx, fy, fw, fh, ef.fit || "cover", Number(ef.radius) || 0);
+
+    } else if (ef.type === "photo") {
+      const src = row.images?.[0]?.dataUrl;
+      if (src) await drawImageToCanvas(ctx, src, fx, fy, fw, fh, "cover", 0);
+
+    } else if (ef.type === "sectionheader") {
+      const baseFontSize = (typeof ef.fontSize === "number" && ef.fontSize > 0) ? ef.fontSize : 16;
+      const fs = Math.max(8, Math.round(baseFontSize * scale));
+      ctx.font = `${ef.fontStyle || "normal"} ${ef.fontWeight || "700"} ${fs}px 'Space Grotesk',Arial`;
+      ctx.fillStyle = ef.textColor || "#1a1a2e";
+      ctx.textAlign = ef.textAlign || "left"; ctx.textBaseline = "middle";
+      const tx = ctx.textAlign === "center" ? fx+fw/2 : ctx.textAlign === "right" ? fx+fw-4 : fx+4;
+      ctx.fillText(ef.value || ef.label || "Section", tx, fy + fh/2);
+      const lh = Math.max(1, Math.round(2 * scale));
+      ctx.fillRect(fx, fy + fh - lh, fw, lh);
+
+    } else if (ef.type === "constant") {
+      const baseFontSize = (typeof ef.fontSize === "number" && ef.fontSize > 0) ? ef.fontSize : 14;
+      const fs = Math.max(8, Math.round(baseFontSize * scale));
+      ctx.font = `${ef.fontStyle || "normal"} ${ef.fontWeight || "400"} ${fs}px 'Space Grotesk',Arial`;
+      ctx.fillStyle = ef.textColor || "#1a1a2e";
+      ctx.textAlign = ef.textAlign || "left"; ctx.textBaseline = "middle";
+      const tx = ctx.textAlign === "center" ? fx+fw/2 : ctx.textAlign === "right" ? fx+fw-4 : fx+4;
+      ctx.fillText(String(ef.value || ""), tx, fy + fh/2);
+
+    } else if (ef.type === "table") {
+      const rows = clamp(Math.round(Number(ef.rows) || 3), 1, 12);
+      const cols = clamp(Math.round(Number(ef.cols) || 3), 1, 12);
+      const matrix = Array.isArray(row.grid) ? row.grid : getTableMatrix(ef);
+      const borderW = Math.max(1, Number(ef.borderWidth) || 1);
+      const colTr = parseTableTrackList(ef.colWidths, cols);
+      const rowTr = parseTableTrackList(ef.rowHeights, rows);
+      const totalC = colTr.reduce((s, v) => s + v, 0) || 1;
+      const totalR = rowTr.reduce((s, v) => s + v, 0) || 1;
+      const cfs = Math.max(8, Math.round(12 * scale));
+      let cy = fy;
+      for (let r = 0; r < rows; r++) {
+        const ch = Math.round((rowTr[r] / totalR) * fh);
+        let cx = fx;
+        for (let c = 0; c < cols; c++) {
+          const cw = Math.round((colTr[c] / totalC) * fw);
+          ctx.fillStyle = ef.cellBg || "#ffffff"; ctx.fillRect(cx, cy, cw, ch);
+          ctx.strokeStyle = ef.borderColor || "#5e75b8"; ctx.lineWidth = borderW; ctx.strokeRect(cx, cy, cw, ch);
+          ctx.font = `${cfs}px Arial`; ctx.fillStyle = ef.textColor || "#24366b";
+          ctx.textAlign = "left"; ctx.textBaseline = "middle";
+          ctx.fillText(matrix[r]?.[c] || "", cx + 4, cy + ch/2);
+          cx += cw;
+        }
+        cy += ch;
       }
-    } else if (field.type === "sectionheader") {
-      block.style.fontWeight = "700";
-      block.style.fontSize = `${Math.max(14, 16 * Math.min(scaleX, scaleY))}px`;
-      block.textContent = String(field.value || field.label || "Section");
-    } else if (field.type === "divider") {
-      block.style.background = "#9fb7af";
-      block.style.height = `${Math.max(1, 2 * scaleY)}px`;
-      block.style.top = `${((Number(field.y) || 0) + ((Number(field.h) || 8) / 2)) * scaleY}px`;
-      block.style.borderRadius = "999px";
-    } else if (field.type === "table") {
-      const rows = clamp(Math.round(Number(field.rows) || 3), 1, 12);
-      const cols = clamp(Math.round(Number(field.cols) || 3), 1, 12);
-      const trackTemplates = getTableTrackTemplates(field, rows, cols);
-      const matrix = Array.isArray(row.grid) ? row.grid : getTableMatrix(field);
-      const table = document.createElement("div");
-      table.className = "export-table-grid";
-      table.style.gridTemplateColumns = trackTemplates.colsTemplate;
-      table.style.gridTemplateRows = trackTemplates.rowsTemplate;
-      table.style.setProperty("--tbl-border-color", field.borderColor || "#5e75b8");
-      table.style.setProperty("--tbl-border-width", `${Math.max(1, Number(field.borderWidth) || 1)}px`);
-      table.style.setProperty("--tbl-bg", field.cellBg || "#ffffff");
-      table.style.setProperty("--tbl-text", field.textColor || "#24366b");
 
-      for (let r = 0; r < rows; r += 1) {
-        for (let c = 0; c < cols; c += 1) {
-          const cell = document.createElement("div");
-          cell.className = "export-table-cell";
-          cell.textContent = matrix[r]?.[c] || "";
-          table.appendChild(cell);
+    } else {
+      // All regular input fields (text, email, textarea, select, radio, checkbox, date, etc.)
+      const baseFontSize = (typeof ef.fontSize === "number" && ef.fontSize > 0) ? ef.fontSize : 14;
+      const fs     = Math.max(8, Math.round(baseFontSize * scale));
+      const weight = String(ef.fontWeight || "400");
+      const fStyle = ef.fontStyle      || "normal";
+      const tDeco  = ef.textDecoration || "none";
+      const tAlign = ef.textAlign      || "left";
+      const pad    = Math.round(4 * scale);
+
+      // Value only — no label, no underline border in the exported document
+      let displayValue = Array.isArray(row.value) ? row.value.join(", ") : String(row.value ?? "");
+      ctx.font = `${fStyle} ${weight} ${fs}px 'Space Grotesk',Arial`;
+      ctx.textBaseline = "middle";
+
+      if (!displayValue && ef.placeholder) {
+        ctx.fillStyle = "#9ca3af"; ctx.textAlign = "left";
+        ctx.fillText(`(${ef.placeholder})`, fx + pad, fy + fh / 2);
+      } else if (displayValue) {
+        ctx.fillStyle = ef.textColor || "#1a1a2e";
+        ctx.textAlign = tAlign === "center" ? "center" : tAlign === "right" ? "right" : "left";
+        const tx = tAlign === "center" ? fx + fw / 2 : tAlign === "right" ? fx + fw - pad : fx + pad;
+        ctx.fillText(displayValue, tx, fy + fh / 2);
+        // Manual underline (from Essential Tools U button only — not the field border)
+        if (tDeco === "underline") {
+          const tm = ctx.measureText(displayValue);
+          const ulx = tAlign === "center" ? tx - tm.width / 2 : tAlign === "right" ? tx - tm.width : tx;
+          ctx.fillStyle = ef.textColor || "#1a1a2e";
+          ctx.fillRect(ulx, fy + fh / 2 + fs / 2 + 1, tm.width, Math.max(1, Math.round(scale)));
         }
       }
-
-      block.appendChild(table);
-    } else if (field.type === "image") {
-      if (field.imageSrc) {
-        const img = document.createElement("img");
-        img.src = field.imageSrc;
-        img.alt = field.label || "Picture";
-        img.style.objectFit = field.fit || "cover";
-        block.appendChild(img);
-      }
-    } else if (field.type === "shaperect") {
-      block.style.background = field.fillColor || "#dff1eb";
-      block.style.border = `${Number(field.strokeWidth) || 1}px solid ${field.strokeColor || "#3b7f71"}`;
-      block.style.borderRadius = `${Number(field.radius) || 0}px`;
-    } else if (field.type === "shapecircle") {
-      block.style.background = field.fillColor || "#f8ead9";
-      block.style.border = `${Number(field.strokeWidth) || 1}px solid ${field.strokeColor || "#ba7a36"}`;
-      block.style.borderRadius = "999px";
-    } else if (field.type === "shapeline") {
-      block.style.background = field.strokeColor || "#4f6f67";
-      block.style.height = `${Math.max(1, Number(field.strokeWidth) || 2) * scaleY}px`;
-      block.style.top = `${((Number(field.y) || 0) + ((Number(field.h) || 8) / 2)) * scaleY}px`;
-      block.style.borderRadius = "999px";
-    } else if (field.type === "elementstar") {
-      block.style.display = "grid";
-      block.style.placeItems = "center";
-      block.style.fontSize = `${Math.max(20, Math.min((Number(field.w) || 80) * scaleX, (Number(field.h) || 80) * scaleY))}px`;
-      block.style.color = field.fillColor || "#f3ca62";
-      block.textContent = "★";
-    } else if (field.type === "elementarrow") {
-      block.style.display = "grid";
-      block.style.placeItems = "center";
-      block.style.fontSize = `${Math.max(18, Math.min((Number(field.w) || 120) * scaleX, (Number(field.h) || 50) * scaleY))}px`;
-      block.style.color = field.fillColor || "#93b9ad";
-      block.textContent = "➜";
-    } else {
-      block.textContent = field.type === "constant" ? String(field.value || "") : String(row.value || "");
     }
 
-    snapshot.appendChild(block);
-  });
+    ctx.restore();
+  }
 
-  return snapshot;
+  return canvas;
 }
 
 function getExportPixelSize(quality) {
   const page = currentTemplate?.page || { size: "A4", orientation: "portrait" };
-  const mm = computeSheetSize(page);
-  const dpi = quality?.dpi || exportQualityPresets.high.dpi;
-
-  const widthPx = Math.max(1200, Math.round((mm.widthMm / MM_PER_INCH) * dpi));
-  const heightPx = Math.max(1600, Math.round((mm.heightMm / MM_PER_INCH) * dpi));
-
-  return { widthPx, heightPx };
-}
-
-function setupOffscreenSnapshot(snapshot, widthPx, heightPx) {
-  snapshot.style.position = "fixed";
-  snapshot.style.left = "-10000px";
-  snapshot.style.top = "0";
-  snapshot.style.width = `${widthPx}px`;
-  snapshot.style.height = `${heightPx}px`;
-  document.body.appendChild(snapshot);
-}
-
-async function renderHighQualityCanvas(snapshot, widthPx, quality) {
-  const baseWidth = Math.max(1, sheetEl.clientWidth || 794);
-  const widthRatio = widthPx / baseWidth;
-  const deviceBoost = Math.max(1.5, window.devicePixelRatio || 1);
-  const minScale = quality?.minScale || exportQualityPresets.high.minScale;
-  const maxScale = quality?.maxScale || exportQualityPresets.high.maxScale;
-  const exportScale = Math.min(maxScale, Math.max(minScale, widthRatio * deviceBoost));
-
-  return html2canvas(snapshot, {
-    backgroundColor: "#ffffff",
-    scale: exportScale,
-    useCORS: true,
-    allowTaint: false,
-    imageTimeout: 0,
-    logging: false
-  });
+  const mm   = computeSheetSize(page);
+  const dpi  = quality?.dpi || exportQualityPresets.high.dpi;
+  return {
+    widthPx:  Math.round((mm.widthMm  / MM_PER_INCH) * dpi),
+    heightPx: Math.round((mm.heightMm / MM_PER_INCH) * dpi),
+    widthMm:  mm.widthMm,
+    heightMm: mm.heightMm
+  };
 }
 
 async function exportAsImage(response, imageType) {
   const qualitySetting = getSelectedQualityPreset();
   const { widthPx, heightPx } = getExportPixelSize(qualitySetting);
-  const snapshot = createSnapshotSheet(response, widthPx, heightPx);
-  setupOffscreenSnapshot(snapshot, widthPx, heightPx);
-
-  try {
-    const canvas = await renderHighQualityCanvas(snapshot, widthPx, qualitySetting);
-    const mime = imageType === "jpg" ? "image/jpeg" : "image/png";
-    const jpegQuality = qualitySetting.jpegQuality || 1;
-    const outputQuality = imageType === "jpg" ? jpegQuality : 1;
-    const dataUrl = canvas.toDataURL(mime, outputQuality);
-    const res = await fetch(dataUrl);
-    const blob = await res.blob();
-    triggerDownload(blob, `${buildSafeName()}-filled.${imageType}`);
-  } finally {
-    snapshot.remove();
-  }
+  const canvas = await renderFormToCanvas(response, widthPx, heightPx, captureInputStyles());
+  const mime   = imageType === "jpg" ? "image/jpeg" : "image/png";
+  const q      = imageType === "jpg" ? (qualitySetting.jpegQuality || 0.95) : 1;
+  const dataUrl = canvas.toDataURL(mime, q);
+  const blob    = await (await fetch(dataUrl)).blob();
+  triggerDownload(blob, `${buildSafeName()}-filled.${imageType}`);
 }
 
 async function exportAsPdf(response) {
   const qualitySetting = getSelectedQualityPreset();
-  const { widthPx, heightPx } = getExportPixelSize(qualitySetting);
-  const snapshot = createSnapshotSheet(response, widthPx, heightPx);
-  setupOffscreenSnapshot(snapshot, widthPx, heightPx);
+  const { widthPx, heightPx, widthMm, heightMm } = getExportPixelSize(qualitySetting);
+  const canvas = await renderFormToCanvas(response, widthPx, heightPx, captureInputStyles());
 
-  try {
-    const canvas = await renderHighQualityCanvas(snapshot, widthPx, qualitySetting);
+  const pdfImageType = qualitySetting.pdfImageType || "PNG";
+  const imgData = pdfImageType === "JPEG"
+    ? canvas.toDataURL("image/jpeg", qualitySetting.jpegQuality || 0.95)
+    : canvas.toDataURL("image/png");
 
-    const pdfImageType = qualitySetting.pdfImageType || "PNG";
-    const imgData = pdfImageType === "JPEG"
-      ? canvas.toDataURL("image/jpeg", qualitySetting.jpegQuality || 0.9)
-      : canvas.toDataURL("image/png");
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({
-      orientation: canvas.width >= canvas.height ? "landscape" : "portrait",
-      unit: "pt",
-      format: [canvas.width, canvas.height]
-    });
-    pdf.addImage(imgData, pdfImageType, 0, 0, canvas.width, canvas.height, undefined, "NONE");
-    pdf.save(`${buildSafeName()}-filled.pdf`);
-  } finally {
-    snapshot.remove();
-  }
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({
+    orientation: widthMm >= heightMm ? "landscape" : "portrait",
+    unit: "mm",
+    format: [widthMm, heightMm],
+    compress: true
+  });
+  pdf.addImage(imgData, pdfImageType, 0, 0, widthMm, heightMm, undefined, "FAST");
+  pdf.save(`${buildSafeName()}-filled.pdf`);
 }
+
+
+
+
 
 async function exportAsDocx(response) {
   if (!window.docx) {
     throw new Error("DOCX library failed to load");
   }
 
-  const { Document, Packer, Paragraph, HeadingLevel } = window.docx;
+  const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle, Table, TableRow, TableCell, WidthType, ShadingType } = window.docx;
   const lines = getRenderableEntries(response);
 
+  function makeTextRun(text, opts = {}) {
+    return new TextRun({ text: String(text), ...opts });
+  }
+
   const children = [
-    new Paragraph({ text: response.templateName || "Filled Form", heading: HeadingLevel.HEADING_1 }),
-    new Paragraph(`Generated: ${response.createdAt}`),
-    new Paragraph("")
+    new Paragraph({
+      children: [makeTextRun(response.templateName || "Filled Form", { bold: true, size: 36, font: "Arial" })],
+      heading: HeadingLevel.HEADING_1,
+      spacing: { after: 120 }
+    }),
+    new Paragraph({
+      children: [makeTextRun(`Generated: ${new Date(response.createdAt).toLocaleString()}`, { size: 18, color: "888888", font: "Arial" })],
+      spacing: { after: 240 }
+    }),
+    new Paragraph({ text: "", spacing: { after: 120 } })
   ];
 
   lines.forEach(({ field, row }) => {
-    if (field.type === "photo") {
-      const names = (row.value || []).join(", ");
-      children.push(new Paragraph(`${field.label || "Photo"}: ${names || "(image attached)"}`));
+    // Skip pure layout/decoration elements in docx (they have no text value)
+    if (["shaperect", "shapecircle", "shapeline", "elementstar", "elementarrow", "image"].includes(field.type)) {
       return;
     }
 
-    const value = field.type === "constant" ? field.value || "" : row.value || "";
-    children.push(new Paragraph(`${field.label || field.type}: ${value}`));
+    if (field.type === "divider") {
+      children.push(new Paragraph({
+        border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: "9fb7af" } },
+        spacing: { before: 120, after: 120 }
+      }));
+      return;
+    }
+
+    if (field.type === "sectionheader") {
+      children.push(new Paragraph({
+        children: [makeTextRun(String(field.value || field.label || ""), { bold: true, size: 26, font: "Arial", color: "2d6a4f" })],
+        spacing: { before: 240, after: 80 }
+      }));
+      children.push(new Paragraph({ border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: "2d6a4f" } }, spacing: { after: 160 } }));
+      return;
+    }
+
+    if (field.type === "constant") {
+      children.push(new Paragraph({
+        children: [makeTextRun(String(field.value || ""), { size: 22, font: "Arial" })],
+        spacing: { after: 80 }
+      }));
+      return;
+    }
+
+    if (field.type === "table") {
+      const matrix = Array.isArray(row.grid) ? row.grid : getTableMatrix(field);
+      const numCols = matrix[0]?.length || 1;
+      const tableRows = matrix.map((rowData) =>
+        new TableRow({
+          children: rowData.map((cellText) =>
+            new TableCell({
+              children: [new Paragraph({
+                children: [makeTextRun(String(cellText || ""), { size: 18, font: "Arial" })]
+              })],
+              width: { size: Math.round(9000 / numCols), type: WidthType.DXA },
+              shading: { type: ShadingType.CLEAR, fill: (field.cellBg || "ffffff").replace("#", "") }
+            })
+          )
+        })
+      );
+      children.push(new Table({ rows: tableRows, width: { size: 9000, type: WidthType.DXA } }));
+      children.push(new Paragraph({ text: "", spacing: { after: 160 } }));
+      return;
+    }
+
+    if (field.type === "photo") {
+      const names = Array.isArray(row.value) ? row.value.join(", ") : (row.value || "");
+      children.push(new Paragraph({
+        children: [
+          makeTextRun(`${field.label || "Photo"}: `, { bold: true, size: 20, font: "Arial" }),
+          makeTextRun(names || "(image attached)", { size: 20, font: "Arial", color: "555555" })
+        ],
+        spacing: { after: 100 }
+      }));
+      return;
+    }
+
+    // Regular input fields
+    const rawValue = Array.isArray(row.value) ? row.value.join(", ") : String(row.value ?? "");
+    const displayValue = rawValue.trim() || "â€”";
+
+    children.push(new Paragraph({
+      children: [makeTextRun((field.label || field.type) + ":", { bold: true, size: 20, font: "Arial", color: "374151" })],
+      spacing: { before: 120, after: 40 }
+    }));
+    children.push(new Paragraph({
+      children: [makeTextRun(displayValue, { size: 22, font: "Arial" })],
+      border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: "d1d5db" } },
+      spacing: { after: 160 }
+    }));
   });
 
-  const doc = new Document({ sections: [{ children }] });
+  const doc = new Document({
+    creator: "Form Studio",
+    description: response.templateName || "Filled Form",
+    sections: [{
+      properties: {},
+      children
+    }]
+  });
   const blob = await Packer.toBlob(doc);
   triggerDownload(blob, `${buildSafeName()}-filled.docx`);
 }
