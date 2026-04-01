@@ -24,9 +24,11 @@ const pageFormats = {
 const MM_PER_INCH = 25.4;
 
 const exportQualityPresets = {
-  standard: { dpi: 220, oversample: 1.4, jpegQuality: 0.93, pdfImageType: "PNG" },
-  high: { dpi: 300, oversample: 1.8, jpegQuality: 0.97, pdfImageType: "PNG" },
-  print: { dpi: 420, oversample: 2.2, jpegQuality: 1, pdfImageType: "PNG" }
+  // Tuned for practical balance: smaller file with high visual readability.
+  standard: { dpi: 240, oversample: 1.55, maxEdge: 8400, jpegQuality: 0.9, pdfImageType: "JPEG" },
+  high: { dpi: 360, oversample: 2.1, maxEdge: 11200, jpegQuality: 0.95, pdfImageType: "JPEG" },
+  // Print keeps highest detail even with larger files.
+  print: { dpi: 560, oversample: 2.9, maxEdge: 15000, jpegQuality: 1, pdfImageType: "PNG" }
 };
 
 let currentTemplate = null;
@@ -73,6 +75,67 @@ function isStylableControl(el) {
 
 function isInsideEssentialTools(el) {
   return Boolean(el && fillerEssentialToolsEl && fillerEssentialToolsEl.contains(el));
+}
+
+function readStylableTextStyle(el) {
+  if (!isStylableControl(el)) {
+    return null;
+  }
+
+  const computed = window.getComputedStyle(el);
+  const textDecorationRaw = String(el.style.textDecoration || computed.textDecorationLine || computed.textDecoration || "none");
+  return {
+    fontSize: el.style.fontSize || computed.fontSize || "14px",
+    fontWeight: el.style.fontWeight || computed.fontWeight || "400",
+    fontStyle: el.style.fontStyle || computed.fontStyle || "normal",
+    textDecoration: textDecorationRaw.includes("underline") ? "underline" : "none",
+    textAlign: el.style.textAlign || computed.textAlign || "left",
+    color: el.style.color || computed.color || "#17322f"
+  };
+}
+
+function applyStylableTextStyle(el, style) {
+  if (!isStylableControl(el) || !style) {
+    return;
+  }
+
+  if (style.fontSize) {
+    el.style.fontSize = style.fontSize;
+  }
+  if (style.fontWeight) {
+    el.style.fontWeight = style.fontWeight;
+  }
+  if (style.fontStyle) {
+    el.style.fontStyle = style.fontStyle;
+  }
+  if (style.textDecoration) {
+    el.style.textDecoration = style.textDecoration;
+  }
+  if (style.textAlign) {
+    el.style.textAlign = style.textAlign;
+  }
+  if (style.color) {
+    el.style.color = style.color;
+  }
+}
+
+function getFieldTextStyleFallback(field) {
+  return {
+    fontSize: `${Math.max(8, Number(field?.fontSize) || 14)}px`,
+    fontWeight: String(field?.fontWeight || 400),
+    fontStyle: field?.fontStyle || "normal",
+    textDecoration: field?.textDecoration || "none",
+    textAlign: field?.textAlign || "left",
+    color: "#17322f"
+  };
+}
+
+function toScaledFontSize(fontSize, scale) {
+  const parsed = Number.parseFloat(String(fontSize || ""));
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return `${Math.max(10, 13 * scale)}px`;
+  }
+  return `${Math.max(8, parsed * scale)}px`;
 }
 
 function setFillerToolDisabled(disabled) {
@@ -621,7 +684,11 @@ function captureInputState() {
 
     const el = sheetEl.querySelector(`[name="${CSS.escape(field.id)}"]`);
     if (el) {
-      stateMap[field.id] = { type: field.type, value: el.value || "" };
+      const next = { type: field.type, value: el.value || "" };
+      if (isStylableControl(el)) {
+        next.style = readStylableTextStyle(el);
+      }
+      stateMap[field.id] = next;
     }
   });
 
@@ -682,6 +749,9 @@ function applyInputState(stateMap) {
     const el = sheetEl.querySelector(`[name="${CSS.escape(field.id)}"]`);
     if (el && typeof saved.value !== "undefined") {
       el.value = saved.value;
+      if (saved.style) {
+        applyStylableTextStyle(el, saved.style);
+      }
     }
   });
 }
@@ -748,7 +818,8 @@ async function collectResponseData() {
       response.values[field.id] = {
         label: field.label,
         type: field.type,
-        value: field.value || ""
+        value: field.value || "",
+        style: getFieldTextStyleFallback(field)
       };
       continue;
     }
@@ -843,7 +914,17 @@ async function collectResponseData() {
       continue;
     }
 
-    response.values[field.id] = { label: field.label, type: field.type, value: (element.value || "").trim() };
+    const nextValue = {
+      label: field.label,
+      type: field.type,
+      value: (element.value || "").trim()
+    };
+
+    if (isStylableControl(element)) {
+      nextValue.style = readStylableTextStyle(element);
+    }
+
+    response.values[field.id] = nextValue;
   }
 
   return response;
@@ -1004,6 +1085,8 @@ function createSnapshotSheet(response, targetWidth, targetHeight) {
     } else {
       const rawValue = row?.value;
       const textValue = Array.isArray(rawValue) ? rawValue.join(", ") : String(rawValue || "");
+      const style = row?.style || getFieldTextStyleFallback(field);
+      const scale = Math.min(scaleX, scaleY);
 
       // Export input-like fields as text only, without form box visuals.
       block.style.display = "block";
@@ -1013,8 +1096,12 @@ function createSnapshotSheet(response, targetWidth, targetHeight) {
       block.style.borderRadius = "0";
       block.style.whiteSpace = "pre-wrap";
       block.style.wordBreak = "break-word";
-      block.style.color = "#17322f";
-      block.style.fontSize = `${Math.max(10, 13 * Math.min(scaleX, scaleY))}px`;
+      block.style.color = style.color || "#17322f";
+      block.style.fontSize = toScaledFontSize(style.fontSize, scale);
+      block.style.fontWeight = style.fontWeight || "400";
+      block.style.fontStyle = style.fontStyle || "normal";
+      block.style.textDecoration = style.textDecoration || "none";
+      block.style.textAlign = style.textAlign || "left";
       block.style.lineHeight = "1.35";
       block.textContent = textValue;
     }
@@ -1050,7 +1137,7 @@ function setupOffscreenSnapshot(snapshot, widthPx, heightPx) {
 
 function getRenderDimensions(widthPx, heightPx, quality) {
   const oversample = Math.max(1, Number(quality?.oversample) || 1);
-  const maxEdge = 12000;
+  const maxEdge = Math.max(7000, Number(quality?.maxEdge) || 12000);
 
   let renderWidth = Math.round(widthPx * oversample);
   let renderHeight = Math.round(heightPx * oversample);
@@ -1151,7 +1238,8 @@ async function exportAsPdf(response) {
     });
 
     try {
-      pdf.addImage(imgData, pdfImageType, 0, 0, mm.widthMm, mm.heightMm, undefined, "FAST");
+      const compressionMode = pdfImageType === "JPEG" ? "MEDIUM" : "NONE";
+      pdf.addImage(imgData, pdfImageType, 0, 0, mm.widthMm, mm.heightMm, undefined, compressionMode);
     } catch {
       // Fallback path for environments where PNG embedding can fail.
       const fallbackData = await renderHighQualityCanvas(snapshot, widthPx, heightPx, {
@@ -1159,7 +1247,7 @@ async function exportAsPdf(response) {
         pdfImageType: "JPEG",
         jpegQuality: Math.min(1, Math.max(0.85, qualitySetting.jpegQuality || 0.95))
       });
-      pdf.addImage(fallbackData, "JPEG", 0, 0, mm.widthMm, mm.heightMm, undefined, "FAST");
+      pdf.addImage(fallbackData, "JPEG", 0, 0, mm.widthMm, mm.heightMm, undefined, "MEDIUM");
     }
 
     pdf.save(`${buildSafeName()}-filled.pdf`);
@@ -1170,7 +1258,7 @@ async function exportAsPdf(response) {
 
 async function downloadFilledData() {
   if (!currentTemplate) {
-    window.requestAnimationFrame(() => renderTemplate(currentTemplate, true));
+    return;
   }
 
   const response = await collectResponseData();
