@@ -167,6 +167,11 @@ const toolAlignRightEl = document.getElementById("toolAlignRight");
 
 let splitDragState = null;
 
+const splitLimits = {
+  palette: { min: 220, max: 520, fallback: 280 },
+  config: { min: 280, max: 560, fallback: 320 }
+};
+
 function uid() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -705,28 +710,55 @@ function getSelectedField() {
   return state.fields.find((f) => f.id === state.selectedId) || null;
 }
 
-function bringSelectedToFront() {
+function moveSelectionByOneLayer(direction) {
   const selectedIds = new Set(state.selectedIds);
-  if (!selectedIds.size) {
+  if (!selectedIds.size || state.fields.length < 2) {
+    return false;
+  }
+
+  let moved = false;
+
+  if (direction > 0) {
+    // Move forward by one z-index step.
+    for (let idx = state.fields.length - 2; idx >= 0; idx -= 1) {
+      const currentSelected = selectedIds.has(state.fields[idx].id);
+      const nextSelected = selectedIds.has(state.fields[idx + 1].id);
+      if (currentSelected && !nextSelected) {
+        [state.fields[idx], state.fields[idx + 1]] = [state.fields[idx + 1], state.fields[idx]];
+        moved = true;
+      }
+    }
+  } else if (direction < 0) {
+    // Move backward by one z-index step.
+    for (let idx = 1; idx < state.fields.length; idx += 1) {
+      const currentSelected = selectedIds.has(state.fields[idx].id);
+      const prevSelected = selectedIds.has(state.fields[idx - 1].id);
+      if (currentSelected && !prevSelected) {
+        [state.fields[idx - 1], state.fields[idx]] = [state.fields[idx], state.fields[idx - 1]];
+        moved = true;
+      }
+    }
+  }
+
+  return moved;
+}
+
+function bringSelectedToFront() {
+  const moved = moveSelectionByOneLayer(1);
+  if (!moved) {
     return;
   }
 
-  const keep = state.fields.filter((f) => !selectedIds.has(f.id));
-  const moved = state.fields.filter((f) => selectedIds.has(f.id));
-  state.fields = [...keep, ...moved];
   render();
   recordHistory();
 }
 
 function sendSelectedToBack() {
-  const selectedIds = new Set(state.selectedIds);
-  if (!selectedIds.size) {
+  const moved = moveSelectionByOneLayer(-1);
+  if (!moved) {
     return;
   }
 
-  const moved = state.fields.filter((f) => selectedIds.has(f.id));
-  const keep = state.fields.filter((f) => !selectedIds.has(f.id));
-  state.fields = [...moved, ...keep];
   render();
   recordHistory();
 }
@@ -1919,11 +1951,11 @@ function startSplitDrag(event, dividerId) {
     
     if (dividerId === 1) {
       // Resize palette and canvas (divider1)
-      const newPaletteWidth = Math.max(200, Math.min(startLeftWidth + deltaX, 500));
+      const newPaletteWidth = Math.max(splitLimits.palette.min, Math.min(startLeftWidth + deltaX, splitLimits.palette.max));
       document.querySelector(".col-palette").style.flex = `0 0 ${newPaletteWidth}px`;
     } else {
       // Resize config and canvas (divider2)
-      const newConfigWidth = Math.max(220, Math.min(startRightWidth - deltaX, 500));
+      const newConfigWidth = Math.max(splitLimits.config.min, Math.min(startRightWidth - deltaX, splitLimits.config.max));
       document.querySelector(".col-config").style.flex = `0 0 ${newConfigWidth}px`;
     }
   };
@@ -1940,11 +1972,29 @@ function startSplitDrag(event, dividerId) {
 }
 
 function saveSplitState() {
+  const paletteWidth = Math.round(document.querySelector(".col-palette").getBoundingClientRect().width);
+  const configWidth = Math.round(document.querySelector(".col-config").getBoundingClientRect().width);
+
   const splitState = {
-    palette: document.querySelector(".col-palette").style.flex,
-    config: document.querySelector(".col-config").style.flex
+    palette: clamp(paletteWidth, splitLimits.palette.min, splitLimits.palette.max),
+    config: clamp(configWidth, splitLimits.config.min, splitLimits.config.max)
   };
   localStorage.setItem("formStudio.splitState", JSON.stringify(splitState));
+}
+
+function parseSavedSplitWidth(value, fallback) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const pxMatch = value.match(/([\d.]+)\s*px/i);
+    if (pxMatch) {
+      return Number(pxMatch[1]);
+    }
+  }
+
+  return fallback;
 }
 
 function restoreSplitState() {
@@ -1954,12 +2004,15 @@ function restoreSplitState() {
   }
   try {
     const parsed = JSON.parse(saved);
-    if (parsed.palette) {
-      document.querySelector(".col-palette").style.flex = parsed.palette;
-    }
-    if (parsed.config) {
-      document.querySelector(".col-config").style.flex = parsed.config;
-    }
+
+    const paletteRaw = parseSavedSplitWidth(parsed.palette, splitLimits.palette.fallback);
+    const configRaw = parseSavedSplitWidth(parsed.config, splitLimits.config.fallback);
+
+    const paletteWidth = clamp(paletteRaw, splitLimits.palette.min, splitLimits.palette.max);
+    const configWidth = clamp(configRaw, splitLimits.config.min, splitLimits.config.max);
+
+    document.querySelector(".col-palette").style.flex = `0 0 ${paletteWidth}px`;
+    document.querySelector(".col-config").style.flex = `0 0 ${configWidth}px`;
   } catch (e) {
     console.error("Failed to restore split state:", e);
   }

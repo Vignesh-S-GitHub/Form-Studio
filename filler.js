@@ -578,7 +578,116 @@ function createInput(field) {
   return input;
 }
 
-function renderTemplate(template) {
+function captureInputState() {
+  if (!currentTemplate) {
+    return {};
+  }
+
+  const stateMap = {};
+
+  currentTemplate.fields.forEach((field) => {
+    if (field.type === "table" && (field.cellMode || "text") === "input") {
+      const matrix = getTableMatrix(field).map((row) => [...row]);
+      const inputs = Array.from(sheetEl.querySelectorAll(`[data-table-owner="${CSS.escape(field.id)}"]`));
+      inputs.forEach((input) => {
+        const rowIndex = Number(input.dataset.row);
+        const colIndex = Number(input.dataset.col);
+        if (Number.isInteger(rowIndex) && Number.isInteger(colIndex) && matrix[rowIndex] && typeof matrix[rowIndex][colIndex] !== "undefined") {
+          matrix[rowIndex][colIndex] = input.value || "";
+        }
+      });
+      stateMap[field.id] = { type: field.type, grid: matrix };
+      return;
+    }
+
+    if (field.type === "radio") {
+      const checked = sheetEl.querySelector(`input[type="radio"][name="${CSS.escape(field.id)}"]:checked`);
+      stateMap[field.id] = { type: field.type, value: checked ? checked.value : "" };
+      return;
+    }
+
+    if (field.type === "checkbox") {
+      const checked = Array.from(sheetEl.querySelectorAll(`input[type="checkbox"][name="${CSS.escape(field.id)}"]:checked`)).map((el) => el.value);
+      stateMap[field.id] = { type: field.type, value: checked };
+      return;
+    }
+
+    if (field.type === "multiselect") {
+      const selectEl = sheetEl.querySelector(`select[name="${CSS.escape(field.id)}"]`);
+      const selectedValues = selectEl ? Array.from(selectEl.selectedOptions).map((opt) => opt.value) : [];
+      stateMap[field.id] = { type: field.type, value: selectedValues };
+      return;
+    }
+
+    const el = sheetEl.querySelector(`[name="${CSS.escape(field.id)}"]`);
+    if (el) {
+      stateMap[field.id] = { type: field.type, value: el.value || "" };
+    }
+  });
+
+  return stateMap;
+}
+
+function applyInputState(stateMap) {
+  if (!stateMap || typeof stateMap !== "object") {
+    return;
+  }
+
+  currentTemplate.fields.forEach((field) => {
+    const saved = stateMap[field.id];
+    if (!saved) {
+      return;
+    }
+
+    if (field.type === "table" && (field.cellMode || "text") === "input" && Array.isArray(saved.grid)) {
+      const inputs = Array.from(sheetEl.querySelectorAll(`[data-table-owner="${CSS.escape(field.id)}"]`));
+      inputs.forEach((input) => {
+        const rowIndex = Number(input.dataset.row);
+        const colIndex = Number(input.dataset.col);
+        if (Number.isInteger(rowIndex) && Number.isInteger(colIndex) && saved.grid[rowIndex] && typeof saved.grid[rowIndex][colIndex] !== "undefined") {
+          input.value = saved.grid[rowIndex][colIndex] || "";
+        }
+      });
+      return;
+    }
+
+    if (field.type === "radio") {
+      const radios = Array.from(sheetEl.querySelectorAll(`input[type="radio"][name="${CSS.escape(field.id)}"]`));
+      radios.forEach((radio) => {
+        radio.checked = radio.value === String(saved.value || "");
+      });
+      return;
+    }
+
+    if (field.type === "checkbox") {
+      const values = Array.isArray(saved.value) ? saved.value : [];
+      const checks = Array.from(sheetEl.querySelectorAll(`input[type="checkbox"][name="${CSS.escape(field.id)}"]`));
+      checks.forEach((checkbox) => {
+        checkbox.checked = values.includes(checkbox.value);
+      });
+      return;
+    }
+
+    if (field.type === "multiselect") {
+      const selectEl = sheetEl.querySelector(`select[name="${CSS.escape(field.id)}"]`);
+      if (selectEl) {
+        const values = Array.isArray(saved.value) ? saved.value : [];
+        Array.from(selectEl.options).forEach((opt) => {
+          opt.selected = values.includes(opt.value);
+        });
+      }
+      return;
+    }
+
+    const el = sheetEl.querySelector(`[name="${CSS.escape(field.id)}"]`);
+    if (el && typeof saved.value !== "undefined") {
+      el.value = saved.value;
+    }
+  });
+}
+
+function renderTemplate(template, preserveValues = false) {
+  const previousState = preserveValues ? captureInputState() : null;
   const safeFields = getSafeFields(template);
   currentTemplate = { ...template, fields: safeFields };
   titleEl.textContent = currentTemplate.templateName || "Fill Form";
@@ -612,6 +721,10 @@ function renderTemplate(template) {
     card.appendChild(createInput(field));
     sheetEl.appendChild(card);
   });
+
+  if (previousState) {
+    applyInputState(previousState);
+  }
 }
 
 function readFileAsDataUrl(file) {
@@ -674,6 +787,25 @@ async function collectResponseData() {
       continue;
     }
 
+    if (field.type === "radio") {
+      const checked = sheetEl.querySelector(`input[type="radio"][name="${CSS.escape(field.id)}"]:checked`);
+      response.values[field.id] = { label: field.label, type: field.type, value: checked ? checked.value : "" };
+      continue;
+    }
+
+    if (field.type === "checkbox") {
+      const checkedValues = Array.from(sheetEl.querySelectorAll(`input[type="checkbox"][name="${CSS.escape(field.id)}"]:checked`)).map((el) => el.value);
+      response.values[field.id] = { label: field.label, type: field.type, value: checkedValues };
+      continue;
+    }
+
+    if (field.type === "multiselect") {
+      const selectEl = sheetEl.querySelector(`select[name="${CSS.escape(field.id)}"]`);
+      const selectedValues = selectEl ? Array.from(selectEl.selectedOptions).map((opt) => opt.value) : [];
+      response.values[field.id] = { label: field.label, type: field.type, value: selectedValues };
+      continue;
+    }
+
     const element = sheetEl.querySelector(`[name="${CSS.escape(field.id)}"]`);
     if (!element) {
       response.values[field.id] = { label: field.label, type: field.type, value: field.value || "" };
@@ -697,6 +829,16 @@ async function collectResponseData() {
         type: field.type,
         value: files.map((f) => f.name),
         images
+      };
+      continue;
+    }
+
+    if (field.type === "file") {
+      const files = Array.from(element.files || []);
+      response.values[field.id] = {
+        label: field.label,
+        type: field.type,
+        value: files.map((f) => f.name)
       };
       continue;
     }
@@ -1028,7 +1170,7 @@ async function exportAsPdf(response) {
 
 async function downloadFilledData() {
   if (!currentTemplate) {
-    return;
+    window.requestAnimationFrame(() => renderTemplate(currentTemplate, true));
   }
 
   const response = await collectResponseData();
@@ -1240,7 +1382,7 @@ function bindEvents() {
 
   window.addEventListener("resize", () => {
     if (currentTemplate) {
-      renderTemplate(currentTemplate);
+      renderTemplate(currentTemplate, true);
     }
   });
 

@@ -18,7 +18,6 @@ Form Studio includes a Canva-style template builder and a linked filler page.
 - Undo/Redo history for layout edits
 - Layers panel with bring-front/send-back and lock/unlock
 - Keyboard shortcuts for fast layout edits
-- Export JSON including page metadata and placed object coordinates
 - Download template JSON file
 - Open linked filler page with current template auto-loaded
 
@@ -30,7 +29,7 @@ Form Studio includes a Canva-style template builder and a linked filler page.
 - **Collapsible Info sidebar**: Click − / ► button to toggle template info display
 - **Drag-to-resize sidebar**: Hover and drag the colored edge to resize the info panel
 - Fill data on the same sheet alignment as builder
-- Download filled form in multiple formats: JSON, PDF, DOCX, PNG, JPG, TXT
+- Download filled form in formats: PDF, PNG, JPG
 - Export quality selector: Standard, High, or Print (300 DPI)
 - Export outputs include constants and only the fields the user filled
 
@@ -102,7 +101,6 @@ Form Studio includes a Canva-style template builder and a linked filler page.
 - **Auto-save draft** and restore on page reload
 - **Copy/duplicate objects** with Ctrl+D or Cmd+D
 - **Clear sheet** to start template over
-- **Export JSON** with complete template structure
 - **Download template** as JSON file for sharing
 
 ## Filler Features
@@ -119,7 +117,7 @@ Form Studio includes a Canva-style template builder and a linked filler page.
   - Signature canvas (ready for drawing)
   - Star rating controls
 - **Smart export** (only filled values + constants)
-- **Multiple export formats**: JSON, PDF, DOCX, PNG, JPG, TXT
+- **Export formats**: PDF, PNG, JPG
 - **Export quality selector**: Standard, High, Print (300 DPI)
 - **Auto-load template** from builder via local storage
 - **Manual upload** of template JSON files
@@ -144,7 +142,7 @@ For fill mode, open [filler.html](filler.html).
 
 - No syntax errors in workspace files (validated in editor)
 - Builder and filler flows linked and working
-- Template and filled-form exports tested (JSON, PDF, DOCX, PNG, JPG, TXT)
+- Template and filled-form exports tested (PDF, PNG, JPG)
 - Responsive layout tuned for desktop/laptop usage
 - Split-pane state persistence enabled
 - No temporary debug logs in source files
@@ -164,7 +162,7 @@ Before pushing to GitHub, do this quick checklist:
 
 1. Open builder and filler once and verify your latest UI changes.
 2. Hard refresh browser (`Ctrl+F5`) to clear cached CSS/JS.
-3. Confirm exports from filler (JSON + one binary format like PDF).
+3. Confirm exports from filler (PDF/PNG/JPG).
 4. Commit with a clean message such as `feat: production-ready Form Studio builder and filler`.
 
 ## Optional GitHub Pages Deploy
