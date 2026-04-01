@@ -148,6 +148,15 @@ For fill mode, open [filler.html](filler.html).
 - Responsive layout tuned for desktop/laptop usage
 - Split-pane state persistence enabled
 - No temporary debug logs in source files
+- Installable web app (PWA) enabled with manifest + service worker
+
+## Web App Features (PWA)
+
+- Install prompt support in compatible browsers
+- Standalone app display mode
+- App icon and theme color configured
+- Offline-ready shell caching for key app files
+- Runtime caching for same-origin files and CDN libraries used by filler exports
 
 ## GitHub Upload Preparation
 
@@ -169,3 +178,13 @@ This project is static (HTML/CSS/JS), so GitHub Pages works directly.
 5. Save and wait for the Pages URL.
 
 Use the deployed `index.html` as entry point.
+
+## Notes for Existing GitHub Pages URL
+
+If you already published at:
+
+- [https://vignesh-s-github.github.io/Form-Studio/](https://vignesh-s-github.github.io/Form-Studio/)
+
+then PWA install and service worker work under that same path.
+
+After deploying updates, open the app once and hard refresh (`Ctrl+F5`) to activate the new service worker/cache version.
