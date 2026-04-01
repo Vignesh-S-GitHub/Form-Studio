@@ -24,9 +24,9 @@ const pageFormats = {
 const MM_PER_INCH = 25.4;
 
 const exportQualityPresets = {
-  standard: { dpi: 160, minScale: 2, maxScale: 4, jpegQuality: 0.9, pdfImageType: "JPEG" },
-  high: { dpi: 220, minScale: 2.5, maxScale: 6, jpegQuality: 0.96, pdfImageType: "PNG" },
-  print: { dpi: 300, minScale: 3, maxScale: 8, jpegQuality: 1, pdfImageType: "PNG" }
+  standard: { dpi: 220, oversample: 1.4, jpegQuality: 0.93, pdfImageType: "PNG" },
+  high: { dpi: 300, oversample: 1.8, jpegQuality: 0.97, pdfImageType: "PNG" },
+  print: { dpi: 420, oversample: 2.2, jpegQuality: 1, pdfImageType: "PNG" }
 };
 
 let currentTemplate = null;
@@ -735,25 +735,14 @@ function getRenderableEntries(response) {
 
   currentTemplate.fields.forEach((field) => {
     const row = response.values[field.id];
-    if (!row) {
-      return;
-    }
 
-    if (["constant", "sectionheader", "divider", "table", "image", "shaperect", "shapecircle", "shapeline", "elementstar", "elementarrow"].includes(field.type)) {
-      entries.push({ field, row });
-      return;
-    }
+    const fallbackRow = {
+      label: field.label,
+      type: field.type,
+      value: field.value || ""
+    };
 
-    if (field.type === "photo") {
-      if ((row.images || []).length) {
-        entries.push({ field, row });
-      }
-      return;
-    }
-
-    if (String(row.value || "").trim()) {
-      entries.push({ field, row });
-    }
+    entries.push({ field, row: row || fallbackRow });
   });
 
   return entries;
@@ -871,7 +860,21 @@ function createSnapshotSheet(response, targetWidth, targetHeight) {
       block.style.color = field.fillColor || "#93b9ad";
       block.textContent = "➜";
     } else {
-      block.textContent = field.type === "constant" ? String(field.value || "") : String(row.value || "");
+      const rawValue = row?.value;
+      const textValue = Array.isArray(rawValue) ? rawValue.join(", ") : String(rawValue || "");
+
+      // Export input-like fields as text only, without form box visuals.
+      block.style.display = "block";
+      block.style.padding = "0";
+      block.style.border = "none";
+      block.style.background = "transparent";
+      block.style.borderRadius = "0";
+      block.style.whiteSpace = "pre-wrap";
+      block.style.wordBreak = "break-word";
+      block.style.color = "#17322f";
+      block.style.fontSize = `${Math.max(10, 13 * Math.min(scaleX, scaleY))}px`;
+      block.style.lineHeight = "1.35";
+      block.textContent = textValue;
     }
 
     snapshot.appendChild(block);
@@ -893,29 +896,80 @@ function getExportPixelSize(quality) {
 
 function setupOffscreenSnapshot(snapshot, widthPx, heightPx) {
   snapshot.style.position = "fixed";
-  snapshot.style.left = "-10000px";
+  snapshot.style.left = "0";
   snapshot.style.top = "0";
+  snapshot.style.opacity = "1";
+  snapshot.style.pointerEvents = "none";
+  snapshot.style.zIndex = "-1";
   snapshot.style.width = `${widthPx}px`;
   snapshot.style.height = `${heightPx}px`;
   document.body.appendChild(snapshot);
 }
 
-async function renderHighQualityCanvas(snapshot, widthPx, quality) {
-  const baseWidth = Math.max(1, sheetEl.clientWidth || 794);
-  const widthRatio = widthPx / baseWidth;
-  const deviceBoost = Math.max(1.5, window.devicePixelRatio || 1);
-  const minScale = quality?.minScale || exportQualityPresets.high.minScale;
-  const maxScale = quality?.maxScale || exportQualityPresets.high.maxScale;
-  const exportScale = Math.min(maxScale, Math.max(minScale, widthRatio * deviceBoost));
+function getRenderDimensions(widthPx, heightPx, quality) {
+  const oversample = Math.max(1, Number(quality?.oversample) || 1);
+  const maxEdge = 12000;
 
-  return html2canvas(snapshot, {
+  let renderWidth = Math.round(widthPx * oversample);
+  let renderHeight = Math.round(heightPx * oversample);
+
+  const largestEdge = Math.max(renderWidth, renderHeight);
+  if (largestEdge > maxEdge) {
+    const scaleDown = maxEdge / largestEdge;
+    renderWidth = Math.max(1, Math.round(renderWidth * scaleDown));
+    renderHeight = Math.max(1, Math.round(renderHeight * scaleDown));
+  }
+
+  return { renderWidth, renderHeight };
+}
+
+async function renderHighQualityCanvas(snapshot, widthPx, heightPx, quality) {
+  const { renderWidth, renderHeight } = getRenderDimensions(widthPx, heightPx, quality);
+
+  if (window.htmlToImage) {
+    try {
+      const options = {
+        cacheBust: true,
+        backgroundColor: "#ffffff",
+        pixelRatio: 1,
+        canvasWidth: renderWidth,
+        canvasHeight: renderHeight,
+        skipAutoScale: true,
+        style: {
+          transform: "none"
+        }
+      };
+
+      if (quality?.pdfImageType === "JPEG") {
+        return await window.htmlToImage.toJpeg(snapshot, {
+          ...options,
+          quality: quality.jpegQuality || 0.95
+        });
+      }
+
+      return await window.htmlToImage.toPng(snapshot, options);
+    } catch {
+      // Fall through to html2canvas fallback
+    }
+  }
+
+  if (!window.html2canvas) {
+    throw new Error("No export renderer is available");
+  }
+
+  const canvas = await window.html2canvas(snapshot, {
     backgroundColor: "#ffffff",
-    scale: exportScale,
+    scale: Math.max(1, renderWidth / Math.max(1, widthPx)),
     useCORS: true,
     allowTaint: false,
     imageTimeout: 0,
     logging: false
   });
+
+  if (quality?.pdfImageType === "JPEG") {
+    return canvas.toDataURL("image/jpeg", quality.jpegQuality || 0.95);
+  }
+  return canvas.toDataURL("image/png");
 }
 
 async function exportAsImage(response, imageType) {
@@ -925,11 +979,10 @@ async function exportAsImage(response, imageType) {
   setupOffscreenSnapshot(snapshot, widthPx, heightPx);
 
   try {
-    const canvas = await renderHighQualityCanvas(snapshot, widthPx, qualitySetting);
-    const mime = imageType === "jpg" ? "image/jpeg" : "image/png";
-    const jpegQuality = qualitySetting.jpegQuality || 1;
-    const outputQuality = imageType === "jpg" ? jpegQuality : 1;
-    const dataUrl = canvas.toDataURL(mime, outputQuality);
+    const engineQuality = imageType === "jpg"
+      ? { ...qualitySetting, pdfImageType: "JPEG" }
+      : { ...qualitySetting, pdfImageType: "PNG" };
+    const dataUrl = await renderHighQualityCanvas(snapshot, widthPx, heightPx, engineQuality);
     const res = await fetch(dataUrl);
     const blob = await res.blob();
     triggerDownload(blob, `${buildSafeName()}-filled.${imageType}`);
@@ -945,75 +998,32 @@ async function exportAsPdf(response) {
   setupOffscreenSnapshot(snapshot, widthPx, heightPx);
 
   try {
-    const canvas = await renderHighQualityCanvas(snapshot, widthPx, qualitySetting);
-
     const pdfImageType = qualitySetting.pdfImageType || "PNG";
-    const imgData = pdfImageType === "JPEG"
-      ? canvas.toDataURL("image/jpeg", qualitySetting.jpegQuality || 0.9)
-      : canvas.toDataURL("image/png");
+    const imgData = await renderHighQualityCanvas(snapshot, widthPx, heightPx, qualitySetting);
+    const mm = computeSheetSize(currentTemplate?.page || { size: "A4", orientation: "portrait" });
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({
-      orientation: canvas.width >= canvas.height ? "landscape" : "portrait",
-      unit: "pt",
-      format: [canvas.width, canvas.height]
+      orientation: mm.widthMm >= mm.heightMm ? "landscape" : "portrait",
+      unit: "mm",
+      format: [mm.widthMm, mm.heightMm]
     });
-    pdf.addImage(imgData, pdfImageType, 0, 0, canvas.width, canvas.height, undefined, "NONE");
+
+    try {
+      pdf.addImage(imgData, pdfImageType, 0, 0, mm.widthMm, mm.heightMm, undefined, "FAST");
+    } catch {
+      // Fallback path for environments where PNG embedding can fail.
+      const fallbackData = await renderHighQualityCanvas(snapshot, widthPx, heightPx, {
+        ...qualitySetting,
+        pdfImageType: "JPEG",
+        jpegQuality: Math.min(1, Math.max(0.85, qualitySetting.jpegQuality || 0.95))
+      });
+      pdf.addImage(fallbackData, "JPEG", 0, 0, mm.widthMm, mm.heightMm, undefined, "FAST");
+    }
+
     pdf.save(`${buildSafeName()}-filled.pdf`);
   } finally {
     snapshot.remove();
   }
-}
-
-async function exportAsDocx(response) {
-  if (!window.docx) {
-    throw new Error("DOCX library failed to load");
-  }
-
-  const { Document, Packer, Paragraph, HeadingLevel } = window.docx;
-  const lines = getRenderableEntries(response);
-
-  const children = [
-    new Paragraph({ text: response.templateName || "Filled Form", heading: HeadingLevel.HEADING_1 }),
-    new Paragraph(`Generated: ${response.createdAt}`),
-    new Paragraph("")
-  ];
-
-  lines.forEach(({ field, row }) => {
-    if (field.type === "photo") {
-      const names = (row.value || []).join(", ");
-      children.push(new Paragraph(`${field.label || "Photo"}: ${names || "(image attached)"}`));
-      return;
-    }
-
-    const value = field.type === "constant" ? field.value || "" : row.value || "";
-    children.push(new Paragraph(`${field.label || field.type}: ${value}`));
-  });
-
-  const doc = new Document({ sections: [{ children }] });
-  const blob = await Packer.toBlob(doc);
-  triggerDownload(blob, `${buildSafeName()}-filled.docx`);
-}
-
-function exportAsTxt(response) {
-  const lines = [
-    `Template: ${response.templateName || "-"}`,
-    `Generated: ${response.createdAt}`,
-    "",
-    "Values:"
-  ];
-
-  currentTemplate.fields.forEach((field) => {
-    if (!supportedFieldTypes.has(field.type)) {
-      return;
-    }
-
-    const row = response.values[field.id];
-    const value = Array.isArray(row?.value) ? row.value.join(", ") : row?.value;
-    lines.push(`- ${field.label || field.id} (${field.type}): ${value ?? ""}`);
-  });
-
-  const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
-  triggerDownload(blob, `${buildSafeName()}-filled.txt`);
 }
 
 async function downloadFilledData() {
@@ -1022,23 +1032,7 @@ async function downloadFilledData() {
   }
 
   const response = await collectResponseData();
-  const format = exportFormatEl?.value || "json";
-
-  if (format === "json") {
-    const blob = new Blob([JSON.stringify(response, null, 2)], { type: "application/json" });
-    triggerDownload(blob, `${buildSafeName()}-response.json`);
-    return;
-  }
-
-  if (format === "txt") {
-    exportAsTxt(response);
-    return;
-  }
-
-  if (format === "docx") {
-    await exportAsDocx(response);
-    return;
-  }
+  const format = exportFormatEl?.value || "pdf";
 
   if (format === "pdf") {
     await exportAsPdf(response);
