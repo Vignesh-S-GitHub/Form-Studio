@@ -138,14 +138,14 @@ const templateNameEl = document.getElementById("templateName");
 const pageSizeSelectEl = document.getElementById("pageSizeSelect");
 const orientationSelectEl = document.getElementById("orientationSelect");
 const layerListEl = document.getElementById("layerList");
+const setupTemplateFileEl = document.getElementById("setupTemplateFile");
+const builderTemplateFileEl = document.getElementById("builderTemplateFile");
 const vGuideEl = document.getElementById("vGuide");
 const hGuideEl = document.getElementById("hGuide");
 const xMeasureGuideEl = document.getElementById("xMeasureGuide");
 const yMeasureGuideEl = document.getElementById("yMeasureGuide");
 const xMeasureLabelEl = document.getElementById("xMeasureLabel");
 const yMeasureLabelEl = document.getElementById("yMeasureLabel");
-const jsonOutputEl = document.getElementById("jsonOutput");
-const jsonDialogEl = document.getElementById("jsonDialog");
 const btnUndoEl = document.getElementById("btnUndo");
 const btnRedoEl = document.getElementById("btnRedo");
 const btnBringFrontEl = document.getElementById("btnBringFront");
@@ -1468,13 +1468,6 @@ function buildTemplatePayload() {
   };
 }
 
-function exportTemplate() {
-  const payload = buildTemplatePayload();
-  jsonOutputEl.textContent = JSON.stringify(payload, null, 2);
-  localStorage.setItem(templateStorageKey, JSON.stringify(payload));
-  jsonDialogEl.showModal();
-}
-
 function saveDraft() {
   const payload = buildTemplatePayload();
   const text = JSON.stringify(payload);
@@ -1517,6 +1510,44 @@ function restoreFromPayload(payload) {
   orientationSelectEl.value = state.page.orientation;
   setupOrientationEl.value = state.page.orientation;
   return true;
+}
+
+function loadTemplatePayload(payload) {
+  const ok = restoreFromPayload(payload);
+  if (!ok) {
+    return false;
+  }
+
+  appEl.classList.remove("hidden");
+  if (setupDialogEl.open) {
+    setupDialogEl.close();
+  }
+
+  render();
+  historyState.past = [];
+  historyState.future = [];
+  recordHistory();
+  saveDraft();
+  return true;
+}
+
+async function handleTemplateFileLoad(event) {
+  const file = event.target.files?.[0];
+  if (!file) {
+    return;
+  }
+
+  try {
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    if (!loadTemplatePayload(parsed)) {
+      window.alert("Template format is not supported.");
+    }
+  } catch {
+    window.alert("Uploaded file is not valid JSON.");
+  } finally {
+    event.target.value = "";
+  }
 }
 
 function tryRestoreDraft() {
@@ -1935,7 +1966,6 @@ function restoreSplitState() {
 }
 
 function bindEvents() {
-  document.getElementById("btnExport").addEventListener("click", exportTemplate);
   document.getElementById("btnDownloadTemplate").addEventListener("click", downloadTemplate);
   document.getElementById("btnOpenFiller").addEventListener("click", openFillerPage);
   btnUndoEl.addEventListener("click", undo);
@@ -1945,7 +1975,6 @@ function bindEvents() {
   document.getElementById("btnBringFront").addEventListener("click", bringSelectedToFront);
   document.getElementById("btnSendBack").addEventListener("click", sendSelectedToBack);
   document.getElementById("btnToggleLock").addEventListener("click", toggleSelectedLock);
-  document.getElementById("btnCloseDialog").addEventListener("click", () => jsonDialogEl.close());
 
   toolDecFontEl.addEventListener("click", () => {
     const selected = getSelectedField();
@@ -2036,6 +2065,14 @@ function bindEvents() {
     render();
     recordHistory();
   });
+
+  if (setupTemplateFileEl) {
+    setupTemplateFileEl.addEventListener("change", handleTemplateFileLoad);
+  }
+
+  if (builderTemplateFileEl) {
+    builderTemplateFileEl.addEventListener("change", handleTemplateFileLoad);
+  }
 
   window.addEventListener("keydown", (event) => {
     const activeTag = document.activeElement?.tagName;

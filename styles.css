@@ -310,6 +310,19 @@ select {
   color: var(--danger);
 }
 
+.file-btn {
+  display: inline-flex;
+  align-items: center;
+}
+
+.setup-actions {
+  margin-top: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
 /* Split Pane Layout */
 .split-pane {
   margin-top: 1.1rem;

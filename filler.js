@@ -40,8 +40,118 @@ const exportQualityEl = document.getElementById("exportQuality");
 const btnBackBuilderEl = document.getElementById("btnBackBuilder");
 const btnFocusCanvasEl = document.getElementById("btnFocusCanvas");
 const btnExitCanvasEl = document.getElementById("btnExitCanvas");
+const fillerEssentialToolsEl = document.getElementById("fillerEssentialTools");
+const fToolDecFontEl = document.getElementById("fToolDecFont");
+const fToolIncFontEl = document.getElementById("fToolIncFont");
+const fToolFontSizeEl = document.getElementById("fToolFontSize");
+const fToolBoldEl = document.getElementById("fToolBold");
+const fToolItalicEl = document.getElementById("fToolItalic");
+const fToolUnderlineEl = document.getElementById("fToolUnderline");
+const fToolAlignLeftEl = document.getElementById("fToolAlignLeft");
+const fToolAlignCenterEl = document.getElementById("fToolAlignCenter");
+const fToolAlignRightEl = document.getElementById("fToolAlignRight");
 
 let isCanvasFocusMode = false;
+let activeStylableControl = null;
+
+function isStylableControl(el) {
+  if (!el || !(el instanceof HTMLElement)) {
+    return false;
+  }
+
+  if (!(el.matches("input, textarea") && el.classList.contains("fill-control"))) {
+    return false;
+  }
+
+  if (el.tagName === "TEXTAREA") {
+    return true;
+  }
+
+  const inputType = (el.getAttribute("type") || "text").toLowerCase();
+  return !["radio", "checkbox", "file", "hidden"].includes(inputType);
+}
+
+function isInsideEssentialTools(el) {
+  return Boolean(el && fillerEssentialToolsEl && fillerEssentialToolsEl.contains(el));
+}
+
+function setFillerToolDisabled(disabled) {
+  [
+    fToolDecFontEl,
+    fToolIncFontEl,
+    fToolFontSizeEl,
+    fToolBoldEl,
+    fToolItalicEl,
+    fToolUnderlineEl,
+    fToolAlignLeftEl,
+    fToolAlignCenterEl,
+    fToolAlignRightEl
+  ].forEach((el) => {
+    if (el) {
+      el.disabled = disabled;
+    }
+  });
+  fillerEssentialToolsEl?.classList.toggle("is-disabled", disabled);
+}
+
+function setActiveToolButton(activeKey) {
+  fToolAlignLeftEl?.classList.toggle("active", activeKey === "left");
+  fToolAlignCenterEl?.classList.toggle("active", activeKey === "center");
+  fToolAlignRightEl?.classList.toggle("active", activeKey === "right");
+}
+
+function syncFillerToolsState() {
+  const control = activeStylableControl;
+  if (!isStylableControl(control)) {
+    activeStylableControl = null;
+    setFillerToolDisabled(true);
+    if (fToolFontSizeEl) {
+      fToolFontSizeEl.value = "14";
+    }
+    fToolBoldEl?.classList.remove("active");
+    fToolItalicEl?.classList.remove("active");
+    fToolUnderlineEl?.classList.remove("active");
+    setActiveToolButton("");
+    return;
+  }
+
+  setFillerToolDisabled(false);
+  const computed = window.getComputedStyle(control);
+  const fontSize = Math.round(parseFloat(computed.fontSize || "14"));
+  if (fToolFontSizeEl) {
+    fToolFontSizeEl.value = String(Number.isFinite(fontSize) ? fontSize : 14);
+  }
+
+  fToolBoldEl?.classList.toggle("active", Number(computed.fontWeight) >= 700);
+  fToolItalicEl?.classList.toggle("active", computed.fontStyle === "italic");
+  fToolUnderlineEl?.classList.toggle("active", computed.textDecorationLine.includes("underline"));
+
+  const align = (control.style.textAlign || computed.textAlign || "left").toLowerCase();
+  if (["left", "center", "right"].includes(align)) {
+    setActiveToolButton(align);
+  } else {
+    setActiveToolButton("left");
+  }
+}
+
+function applyStyleToActiveControl(styles) {
+  if (!isStylableControl(activeStylableControl)) {
+    return;
+  }
+
+  Object.assign(activeStylableControl.style, styles);
+  syncFillerToolsState();
+}
+
+function toggleStyleOnActiveControl(property, onValue, offValue, computedValue) {
+  if (!isStylableControl(activeStylableControl)) {
+    return;
+  }
+
+  const current = computedValue();
+  activeStylableControl.style[property] = current ? offValue : onValue;
+  syncFillerToolsState();
+}
 
 function setCanvasFocusMode(enabled) {
   const shell = document.querySelector(".filler-shell");
@@ -468,7 +578,116 @@ function createInput(field) {
   return input;
 }
 
-function renderTemplate(template) {
+function captureInputState() {
+  if (!currentTemplate) {
+    return {};
+  }
+
+  const stateMap = {};
+
+  currentTemplate.fields.forEach((field) => {
+    if (field.type === "table" && (field.cellMode || "text") === "input") {
+      const matrix = getTableMatrix(field).map((row) => [...row]);
+      const inputs = Array.from(sheetEl.querySelectorAll(`[data-table-owner="${CSS.escape(field.id)}"]`));
+      inputs.forEach((input) => {
+        const rowIndex = Number(input.dataset.row);
+        const colIndex = Number(input.dataset.col);
+        if (Number.isInteger(rowIndex) && Number.isInteger(colIndex) && matrix[rowIndex] && typeof matrix[rowIndex][colIndex] !== "undefined") {
+          matrix[rowIndex][colIndex] = input.value || "";
+        }
+      });
+      stateMap[field.id] = { type: field.type, grid: matrix };
+      return;
+    }
+
+    if (field.type === "radio") {
+      const checked = sheetEl.querySelector(`input[type="radio"][name="${CSS.escape(field.id)}"]:checked`);
+      stateMap[field.id] = { type: field.type, value: checked ? checked.value : "" };
+      return;
+    }
+
+    if (field.type === "checkbox") {
+      const checked = Array.from(sheetEl.querySelectorAll(`input[type="checkbox"][name="${CSS.escape(field.id)}"]:checked`)).map((el) => el.value);
+      stateMap[field.id] = { type: field.type, value: checked };
+      return;
+    }
+
+    if (field.type === "multiselect") {
+      const selectEl = sheetEl.querySelector(`select[name="${CSS.escape(field.id)}"]`);
+      const selectedValues = selectEl ? Array.from(selectEl.selectedOptions).map((opt) => opt.value) : [];
+      stateMap[field.id] = { type: field.type, value: selectedValues };
+      return;
+    }
+
+    const el = sheetEl.querySelector(`[name="${CSS.escape(field.id)}"]`);
+    if (el) {
+      stateMap[field.id] = { type: field.type, value: el.value || "" };
+    }
+  });
+
+  return stateMap;
+}
+
+function applyInputState(stateMap) {
+  if (!stateMap || typeof stateMap !== "object") {
+    return;
+  }
+
+  currentTemplate.fields.forEach((field) => {
+    const saved = stateMap[field.id];
+    if (!saved) {
+      return;
+    }
+
+    if (field.type === "table" && (field.cellMode || "text") === "input" && Array.isArray(saved.grid)) {
+      const inputs = Array.from(sheetEl.querySelectorAll(`[data-table-owner="${CSS.escape(field.id)}"]`));
+      inputs.forEach((input) => {
+        const rowIndex = Number(input.dataset.row);
+        const colIndex = Number(input.dataset.col);
+        if (Number.isInteger(rowIndex) && Number.isInteger(colIndex) && saved.grid[rowIndex] && typeof saved.grid[rowIndex][colIndex] !== "undefined") {
+          input.value = saved.grid[rowIndex][colIndex] || "";
+        }
+      });
+      return;
+    }
+
+    if (field.type === "radio") {
+      const radios = Array.from(sheetEl.querySelectorAll(`input[type="radio"][name="${CSS.escape(field.id)}"]`));
+      radios.forEach((radio) => {
+        radio.checked = radio.value === String(saved.value || "");
+      });
+      return;
+    }
+
+    if (field.type === "checkbox") {
+      const values = Array.isArray(saved.value) ? saved.value : [];
+      const checks = Array.from(sheetEl.querySelectorAll(`input[type="checkbox"][name="${CSS.escape(field.id)}"]`));
+      checks.forEach((checkbox) => {
+        checkbox.checked = values.includes(checkbox.value);
+      });
+      return;
+    }
+
+    if (field.type === "multiselect") {
+      const selectEl = sheetEl.querySelector(`select[name="${CSS.escape(field.id)}"]`);
+      if (selectEl) {
+        const values = Array.isArray(saved.value) ? saved.value : [];
+        Array.from(selectEl.options).forEach((opt) => {
+          opt.selected = values.includes(opt.value);
+        });
+      }
+      return;
+    }
+
+    const el = sheetEl.querySelector(`[name="${CSS.escape(field.id)}"]`);
+    if (el && typeof saved.value !== "undefined") {
+      el.value = saved.value;
+    }
+  });
+}
+
+function renderTemplate(template, preserveValues = false) {
+  const previousState = preserveValues ? captureInputState() : null;
   const safeFields = getSafeFields(template);
   currentTemplate = { ...template, fields: safeFields };
   titleEl.textContent = currentTemplate.templateName || "Fill Form";
@@ -502,6 +721,10 @@ function renderTemplate(template) {
     card.appendChild(createInput(field));
     sheetEl.appendChild(card);
   });
+
+  if (previousState) {
+    applyInputState(previousState);
+  }
 }
 
 function readFileAsDataUrl(file) {
@@ -564,6 +787,25 @@ async function collectResponseData() {
       continue;
     }
 
+    if (field.type === "radio") {
+      const checked = sheetEl.querySelector(`input[type="radio"][name="${CSS.escape(field.id)}"]:checked`);
+      response.values[field.id] = { label: field.label, type: field.type, value: checked ? checked.value : "" };
+      continue;
+    }
+
+    if (field.type === "checkbox") {
+      const checkedValues = Array.from(sheetEl.querySelectorAll(`input[type="checkbox"][name="${CSS.escape(field.id)}"]:checked`)).map((el) => el.value);
+      response.values[field.id] = { label: field.label, type: field.type, value: checkedValues };
+      continue;
+    }
+
+    if (field.type === "multiselect") {
+      const selectEl = sheetEl.querySelector(`select[name="${CSS.escape(field.id)}"]`);
+      const selectedValues = selectEl ? Array.from(selectEl.selectedOptions).map((opt) => opt.value) : [];
+      response.values[field.id] = { label: field.label, type: field.type, value: selectedValues };
+      continue;
+    }
+
     const element = sheetEl.querySelector(`[name="${CSS.escape(field.id)}"]`);
     if (!element) {
       response.values[field.id] = { label: field.label, type: field.type, value: field.value || "" };
@@ -587,6 +829,16 @@ async function collectResponseData() {
         type: field.type,
         value: files.map((f) => f.name),
         images
+      };
+      continue;
+    }
+
+    if (field.type === "file") {
+      const files = Array.from(element.files || []);
+      response.values[field.id] = {
+        label: field.label,
+        type: field.type,
+        value: files.map((f) => f.name)
       };
       continue;
     }
@@ -908,7 +1160,7 @@ function exportAsTxt(response) {
 
 async function downloadFilledData() {
   if (!currentTemplate) {
-    return;
+    window.requestAnimationFrame(() => renderTemplate(currentTemplate, true));
   }
 
   const response = await collectResponseData();
@@ -1034,6 +1286,89 @@ function bindEvents() {
     btnExitCanvasEl.addEventListener("click", () => setCanvasFocusMode(false));
   }
 
+  if (fillerEssentialToolsEl) {
+    setFillerToolDisabled(true);
+
+    [
+      fToolDecFontEl,
+      fToolIncFontEl,
+      fToolBoldEl,
+      fToolItalicEl,
+      fToolUnderlineEl,
+      fToolAlignLeftEl,
+      fToolAlignCenterEl,
+      fToolAlignRightEl
+    ].forEach((btn) => {
+      btn?.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+      });
+    });
+
+    fToolDecFontEl?.addEventListener("click", () => {
+      const current = Number(fToolFontSizeEl?.value || 14);
+      const next = clamp(current - 1, 8, 72);
+      applyStyleToActiveControl({ fontSize: `${next}px` });
+    });
+
+    fToolIncFontEl?.addEventListener("click", () => {
+      const current = Number(fToolFontSizeEl?.value || 14);
+      const next = clamp(current + 1, 8, 72);
+      applyStyleToActiveControl({ fontSize: `${next}px` });
+    });
+
+    fToolFontSizeEl?.addEventListener("input", () => {
+      const next = clamp(Number(fToolFontSizeEl.value || 14), 8, 72);
+      applyStyleToActiveControl({ fontSize: `${next}px` });
+    });
+
+    fToolBoldEl?.addEventListener("click", () => {
+      toggleStyleOnActiveControl("fontWeight", "700", "500", () => {
+        const value = window.getComputedStyle(activeStylableControl).fontWeight;
+        return Number(value) >= 700;
+      });
+    });
+
+    fToolItalicEl?.addEventListener("click", () => {
+      toggleStyleOnActiveControl("fontStyle", "italic", "normal", () => {
+        return window.getComputedStyle(activeStylableControl).fontStyle === "italic";
+      });
+    });
+
+    fToolUnderlineEl?.addEventListener("click", () => {
+      toggleStyleOnActiveControl("textDecoration", "underline", "none", () => {
+        const value = window.getComputedStyle(activeStylableControl).textDecorationLine;
+        return value.includes("underline");
+      });
+    });
+
+    fToolAlignLeftEl?.addEventListener("click", () => applyStyleToActiveControl({ textAlign: "left" }));
+    fToolAlignCenterEl?.addEventListener("click", () => applyStyleToActiveControl({ textAlign: "center" }));
+    fToolAlignRightEl?.addEventListener("click", () => applyStyleToActiveControl({ textAlign: "right" }));
+
+    sheetEl.addEventListener("focusin", (event) => {
+      const target = event.target;
+      if (isStylableControl(target)) {
+        activeStylableControl = target;
+      } else {
+        activeStylableControl = null;
+      }
+      syncFillerToolsState();
+    });
+
+    sheetEl.addEventListener("focusout", () => {
+      window.setTimeout(() => {
+        const active = document.activeElement;
+        if (isInsideEssentialTools(active)) {
+          return;
+        }
+        if (!isStylableControl(active)) {
+          activeStylableControl = null;
+          syncFillerToolsState();
+        }
+      }, 0);
+    });
+  }
+
   fileInputEl.addEventListener("change", async (event) => {
     const file = event.target.files?.[0];
     if (!file) {
@@ -1053,7 +1388,7 @@ function bindEvents() {
 
   window.addEventListener("resize", () => {
     if (currentTemplate) {
-      renderTemplate(currentTemplate);
+      renderTemplate(currentTemplate, true);
     }
   });
 

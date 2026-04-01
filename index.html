@@ -41,7 +41,11 @@
         </label>
       </div>
 
-      <button class="btn btn-primary" type="submit">Start Building</button>
+      <div class="setup-actions">
+        <button class="btn btn-primary" type="submit">Start Building</button>
+        <label class="btn btn-ghost file-btn" for="setupTemplateFile">Load Existing Template</label>
+        <input id="setupTemplateFile" type="file" accept="application/json,.json" hidden />
+      </div>
     </form>
   </dialog>
 
@@ -72,6 +76,8 @@
         <div class="toolbar-row toolbar-row-tools">
           <button id="btnUndo" class="btn btn-ghost" type="button">Undo</button>
           <button id="btnRedo" class="btn btn-ghost" type="button">Redo</button>
+          <label class="btn btn-ghost file-btn" for="builderTemplateFile">Load Template JSON</label>
+          <input id="builderTemplateFile" type="file" accept="application/json,.json" hidden />
           <div id="essentialTools" class="essential-tools" aria-label="Essential text tools">
             <span class="tool-caption">Essential Tools</span>
             <div class="tool-group tool-group-size">
@@ -94,7 +100,6 @@
           <button id="btnClearSheet" class="btn btn-ghost" type="button">Clear</button>
           <button id="btnDownloadTemplate" class="btn btn-primary" type="button">Download Template</button>
           <button id="btnOpenFiller" class="btn btn-ghost" type="button">Go To Filler</button>
-          <button id="btnExport" class="btn btn-primary" type="button">Export JSON</button>
         </div>
       </div>
     </header>
@@ -170,14 +175,6 @@
       </aside>
     </main>
   </div>
-
-  <dialog id="jsonDialog" class="json-dialog">
-    <div class="dialog-head">
-      <h3>Template JSON</h3>
-      <button id="btnCloseDialog" class="btn btn-ghost" type="button">Close</button>
-    </div>
-    <pre id="jsonOutput"></pre>
-  </dialog>
 
   <script src="pwa.js"></script>
   <script src="app.js"></script>

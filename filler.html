@@ -23,25 +23,49 @@
         <h1 id="fillerTitle">Fill Form</h1>
       </div>
       <div class="topbar-actions">
-        <button id="btnBackBuilder" class="btn btn-ghost" type="button">Back To Builder</button>
-        <button id="btnLoadLatest" class="btn btn-ghost" type="button">Load Latest Template</button>
-        <button id="btnFocusCanvas" class="btn btn-ghost" type="button">Maximize Canvas</button>
-        <label class="btn btn-ghost file-btn" for="templateFile">Upload Template JSON</label>
-        <input id="templateFile" type="file" accept="application/json,.json" hidden />
-        <select id="exportFormat" class="export-format" aria-label="Export format">
-          <option value="json">JSON</option>
-          <option value="pdf">PDF</option>
-          <option value="docx">DOCX</option>
-          <option value="png">PNG</option>
-          <option value="jpg">JPG</option>
-          <option value="txt">TXT</option>
-        </select>
-        <select id="exportQuality" class="export-quality" aria-label="Export quality">
-          <option value="standard">Quality: Standard</option>
-          <option value="high" selected>Quality: High</option>
-          <option value="print">Quality: Print (300 DPI)</option>
-        </select>
-        <button id="btnDownloadFilled" class="btn btn-primary" type="button">Download Filled Form</button>
+        <div class="filler-actions-row filler-actions-row-top">
+          <button id="btnBackBuilder" class="btn btn-ghost" type="button">Back To Builder</button>
+          <button id="btnLoadLatest" class="btn btn-ghost" type="button">Load Latest Template</button>
+          <button id="btnFocusCanvas" class="btn btn-ghost" type="button">Maximize Canvas</button>
+          <label class="btn btn-ghost file-btn" for="templateFile">Upload Template JSON</label>
+          <input id="templateFile" type="file" accept="application/json,.json" hidden />
+        </div>
+
+        <div class="filler-actions-row filler-actions-row-bottom">
+          <div id="fillerEssentialTools" class="essential-tools" aria-label="Filler essential text tools">
+            <span class="tool-caption">Essential Tools</span>
+            <div class="tool-group tool-group-size">
+              <button id="fToolDecFont" class="tool-btn" type="button" aria-label="Decrease font size">-</button>
+              <input id="fToolFontSize" class="tool-size" type="number" min="8" max="72" step="1" value="14" aria-label="Font size" />
+              <button id="fToolIncFont" class="tool-btn" type="button" aria-label="Increase font size">+</button>
+            </div>
+            <div class="tool-group">
+              <button id="fToolBold" class="tool-btn" type="button" aria-label="Bold">B</button>
+              <button id="fToolItalic" class="tool-btn" type="button" aria-label="Italic">I</button>
+              <button id="fToolUnderline" class="tool-btn" type="button" aria-label="Underline">U</button>
+            </div>
+            <div class="tool-group">
+              <button id="fToolAlignLeft" class="tool-btn" type="button" aria-label="Align left">L</button>
+              <button id="fToolAlignCenter" class="tool-btn" type="button" aria-label="Align center">C</button>
+              <button id="fToolAlignRight" class="tool-btn" type="button" aria-label="Align right">R</button>
+            </div>
+          </div>
+
+          <select id="exportFormat" class="export-format" aria-label="Export format">
+            <option value="json">JSON</option>
+            <option value="pdf">PDF</option>
+            <option value="docx">DOCX</option>
+            <option value="png">PNG</option>
+            <option value="jpg">JPG</option>
+            <option value="txt">TXT</option>
+          </select>
+          <select id="exportQuality" class="export-quality" aria-label="Export quality">
+            <option value="standard">Quality: Standard</option>
+            <option value="high" selected>Quality: High</option>
+            <option value="print">Quality: Print (300 DPI)</option>
+          </select>
+          <button id="btnDownloadFilled" class="btn btn-primary" type="button">Download Filled Form</button>
+        </div>
       </div>
     </header>
 
