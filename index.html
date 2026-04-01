@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Form Studio - Builder</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="bg-layer"></div>
+
+  <dialog id="setupDialog" class="setup-dialog">
+    <form id="setupForm" method="dialog" class="setup-card">
+      <p class="eyebrow">Before You Build</p>
+      <h2>Choose Template Sheet Format</h2>
+      <p>Pick a standard size first. You can switch orientation later.</p>
+
+      <div class="setup-grid">
+        <label class="form-row" for="setupName">
+          <span>Template Name</span>
+          <input id="setupName" name="setupName" value="Employee Onboarding Form" required />
+        </label>
+
+        <label class="form-row" for="setupSize">
+          <span>Paper Format</span>
+          <select id="setupSize" name="setupSize"></select>
+        </label>
+
+        <label class="form-row" for="setupOrientation">
+          <span>Orientation</span>
+          <select id="setupOrientation" name="setupOrientation">
+            <option value="portrait">Portrait</option>
+            <option value="landscape">Landscape</option>
+          </select>
+        </label>
+      </div>
+
+      <button class="btn btn-primary" type="submit">Start Building</button>
+    </form>
+  </dialog>
+
+  <div id="builderApp" class="app-shell hidden">
+    <header class="topbar">
+      <div class="topbar-brand">
+        <p class="eyebrow">Form Studio Builder</p>
+        <h1>Form Studio</h1>
+      </div>
+      <div class="topbar-actions">
+        <div class="toolbar-row toolbar-row-main">
+          <input id="templateName" class="template-name" aria-label="Template name" />
+          <div class="format-orientation-group">
+            <label class="topbar-select" for="pageSizeSelect">
+              <span>Format</span>
+              <select id="pageSizeSelect"></select>
+            </label>
+            <label class="topbar-select" for="orientationSelect">
+              <span>Orientation</span>
+              <select id="orientationSelect">
+                <option value="portrait">Portrait</option>
+                <option value="landscape">Landscape</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div class="toolbar-row toolbar-row-tools">
+          <button id="btnUndo" class="btn btn-ghost" type="button">Undo</button>
+          <button id="btnRedo" class="btn btn-ghost" type="button">Redo</button>
+          <div id="essentialTools" class="essential-tools" aria-label="Essential text tools">
+            <span class="tool-caption">Essential Tools</span>
+            <div class="tool-group tool-group-size">
+              <button id="toolDecFont" class="tool-btn" type="button" aria-label="Decrease font size">-</button>
+              <input id="toolFontSize" class="tool-size" type="number" min="8" max="72" step="1" value="14" aria-label="Font size" />
+              <button id="toolIncFont" class="tool-btn" type="button" aria-label="Increase font size">+</button>
+            </div>
+            <div class="tool-group">
+              <button id="toolBold" class="tool-btn" type="button" aria-label="Bold">B</button>
+              <button id="toolItalic" class="tool-btn" type="button" aria-label="Italic">I</button>
+              <button id="toolUnderline" class="tool-btn" type="button" aria-label="Underline">U</button>
+            </div>
+            <div class="tool-group">
+              <button id="toolAlignLeft" class="tool-btn" type="button" aria-label="Align left">L</button>
+              <button id="toolAlignCenter" class="tool-btn" type="button" aria-label="Align center">C</button>
+              <button id="toolAlignRight" class="tool-btn" type="button" aria-label="Align right">R</button>
+            </div>
+          </div>
+          <button id="btnDuplicate" class="btn btn-ghost" type="button">Duplicate</button>
+          <button id="btnClearSheet" class="btn btn-ghost" type="button">Clear</button>
+          <button id="btnDownloadTemplate" class="btn btn-primary" type="button">Download Template</button>
+          <button id="btnOpenFiller" class="btn btn-ghost" type="button">Go To Filler</button>
+          <button id="btnExport" class="btn btn-primary" type="button">Export JSON</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="split-pane">
+      <!-- Left Column: Palette -->
+      <aside class="split-column col-palette">
+        <div class="panel-header">
+          <h2>Field Palette</h2>
+        </div>
+        <div class="panel-content">
+          <p>Drag blocks onto the sheet.</p>
+          <div id="palette" class="palette-grid"></div>
+          <div class="panel-hint">
+            <h3>Form Creation Essentials</h3>
+            <ul>
+              <li>Title and section headers</li>
+              <li>Constant text blocks</li>
+              <li>Text and paragraph placeholders</li>
+              <li>Photo upload constraints</li>
+              <li>Signatures and submit actions</li>
+              <li>Shortcuts: Undo/Redo, Delete, Ctrl+D, Arrow keys</li>
+            </ul>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Divider 1: Between Palette and Canvas -->
+      <div class="split-divider" id="divider1" data-between="palette-canvas"></div>
+
+      <!-- Middle Column: Canvas -->
+      <section class="split-column col-canvas">
+        <div class="canvas-header">
+          <h2>Template Sheet</h2>
+          <span id="fieldCount" class="pill">0 objects</span>
+        </div>
+        <div class="stage-wrap">
+          <div id="sheetStage" class="sheet-stage">
+            <div id="sheet" class="sheet" aria-live="polite"></div>
+            <div id="vGuide" class="guide guide-v hidden"></div>
+            <div id="hGuide" class="guide guide-h hidden"></div>
+            <div id="xMeasureGuide" class="measure-guide measure-guide-x hidden"></div>
+            <div id="yMeasureGuide" class="measure-guide measure-guide-y hidden"></div>
+            <div id="xMeasureLabel" class="measure-label hidden"></div>
+            <div id="yMeasureLabel" class="measure-label hidden"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Divider 2: Between Canvas and Properties -->
+      <div class="split-divider" id="divider2" data-between="canvas-config"></div>
+
+      <!-- Right Column: Properties -->
+      <aside class="split-column col-config">
+        <div class="panel-header">
+          <h2>Properties</h2>
+        </div>
+        <div class="panel-content">
+          <p class="subtitle">Select an object to edit settings.</p>
+          <form id="propertyForm" class="property-form"></form>
+          <div class="layers-wrap">
+            <div class="layers-head">
+              <h3>Layers</h3>
+              <div class="layer-actions">
+                <button id="btnBringFront" class="btn btn-ghost" type="button">Bring Front</button>
+                <button id="btnSendBack" class="btn btn-ghost" type="button">Send Back</button>
+                <button id="btnToggleLock" class="btn btn-ghost" type="button">Lock/Unlock</button>
+              </div>
+            </div>
+            <div id="layerList" class="layer-list"></div>
+          </div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <dialog id="jsonDialog" class="json-dialog">
+    <div class="dialog-head">
+      <h3>Template JSON</h3>
+      <button id="btnCloseDialog" class="btn btn-ghost" type="button">Close</button>
+    </div>
+    <pre id="jsonOutput"></pre>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Form Studio - Filler</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="filler.css" />
+</head>
+<body>
+  <div class="bg-layer"></div>
+
+  <div class="app-shell filler-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Form Studio Filler</p>
+        <h1 id="fillerTitle">Fill Form</h1>
+      </div>
+      <div class="topbar-actions">
+        <button id="btnBackBuilder" class="btn btn-ghost" type="button">Back To Builder</button>
+        <button id="btnLoadLatest" class="btn btn-ghost" type="button">Load Latest Template</button>
+        <button id="btnFocusCanvas" class="btn btn-ghost" type="button">Maximize Canvas</button>
+        <label class="btn btn-ghost file-btn" for="templateFile">Upload Template JSON</label>
+        <input id="templateFile" type="file" accept="application/json,.json" hidden />
+        <select id="exportFormat" class="export-format" aria-label="Export format">
+          <option value="json">JSON</option>
+          <option value="pdf">PDF</option>
+          <option value="docx">DOCX</option>
+          <option value="png">PNG</option>
+          <option value="jpg">JPG</option>
+          <option value="txt">TXT</option>
+        </select>
+        <select id="exportQuality" class="export-quality" aria-label="Export quality">
+          <option value="standard">Quality: Standard</option>
+          <option value="high" selected>Quality: High</option>
+          <option value="print">Quality: Print (300 DPI)</option>
+        </select>
+        <button id="btnDownloadFilled" class="btn btn-primary" type="button">Download Filled Form</button>
+      </div>
+    </header>
+
+    <button id="btnExitCanvas" class="btn btn-primary focus-exit-btn hidden" type="button">Exit Canvas View</button>
+
+    <main class="split-pane filler-split">
+      <!-- Left Column: Info Sidebar -->
+      <aside class="split-column col-info">
+        <div class="panel-header">
+          <h2>Info</h2>
+        </div>
+        <div class="panel-content">
+          <div class="canvas-header" style="margin: 0 0 1rem 0; flex-direction: column; align-items: flex-start; gap: 0.5rem;">
+            <h2 style="margin: 0; font-size: 1rem;">Fill On Sheet</h2>
+            <span id="fillerStatus" class="pill">No template loaded</span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Divider: Between Info and Sheet -->
+      <div class="split-divider" id="fillerDivider" data-between="info-sheet"></div>
+
+      <!-- Right Column: Sheet -->
+      <section class="split-column col-sheet">
+        <div class="stage-wrap">
+          <div class="sheet-stage">
+            <div id="fillSheet" class="sheet fill-sheet"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+  <script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
+  <script src="filler.js"></script>
+</body>
+</html>
