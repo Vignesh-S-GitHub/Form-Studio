@@ -1,188 +1,112 @@
-# Form Studio
+<div align="center">
 
-Form Studio includes a Canva-style template builder and a linked filler page.
+# 📝 Form Studio
 
-## What is included
+### Design a template. Fill it. Export a finished form.
 
-- Startup flow asks for template name and page format first
-- Standard paper formats: A5, A4, A3, Letter, Legal, Tabloid, Executive
-- Orientation switching: portrait and landscape
-- Full-browser dynamic layout with expanded side panels
-- **Collapsible/Expandable side panels**: Click − / ◄ ► buttons to toggle visibility
-- **Drag-to-resize panels**: Hover and drag the colored edge to resize palette or properties
-- Drag-and-drop field placement on a sheet canvas
-- Smart snap and alignment guide lines while dragging
-- Property panel to edit labels, required flag, size, and position
-- Auto-save draft and auto-restore on reload
-- Duplicate selected object and clear sheet actions
-- Undo/Redo history for layout edits
-- Layers panel with bring-front/send-back and lock/unlock
-- Keyboard shortcuts for fast layout edits
-- Download template JSON file
-- Open linked filler page with current template auto-loaded
+**HTML · CSS · JavaScript · Canvas-style editing · PWA**
 
-## Filler flow
+[Features](#-features) · [Quick start](#-quick-start) · [Field types](#-supported-form-objects) · [Shortcuts](#-keyboard-shortcuts) · [Deployment](#-deployment)
 
-- Open `filler.html` directly, or click `Go To Filler` in builder
-- Filler loads latest saved template from local storage
-- Optional: upload a template JSON file manually
-- **Collapsible Info sidebar**: Click − / ► button to toggle template info display
-- **Drag-to-resize sidebar**: Hover and drag the colored edge to resize the info panel
-- Fill data on the same sheet alignment as builder
-- Download filled form in formats: PDF, PNG, JPG
-- Export quality selector: Standard, High, or Print (300 DPI)
-- Export outputs include constants and only the fields the user filled
+</div>
 
-## Supported form objects
+Form Studio is a browser-based form template builder with a linked filler page. Place and arrange fields on a paper-sized canvas, save the layout as JSON, then enter values and export the completed form as PDF, PNG, or JPG.
 
-**Layout & Structure:**
+## ✨ Features
 
-- Section Header (titled section)
-- Divider Line (visual separator)
-- Constant/Label (static text block)
+| Builder | Filler |
+|---|---|
+| Drag-and-drop fields with alignment guides and snap behavior | Fill fields on the same sheet layout |
+| Resize objects using corner and edge handles | Text, selections, dates, files, signatures, and ratings |
+| Edit labels, required flags, position, and dimensions | Native browser validation for applicable inputs |
+| Layers, ordering, and lock/unlock controls | Load the latest local template or upload JSON |
+| Undo/redo, duplicate, clear sheet, and keyboard shortcuts | Export PDF, PNG, and JPG |
+| Auto-save and restore the browser draft | Standard, High, or Print (300 DPI) export quality |
+| Collapsible, resizable palette and properties panels | Collapsible, resizable template information sidebar |
 
-**Text Input:**
+**Paper sizes:** A5 · A4 · A3 · Letter · Legal · Tabloid · Executive, with portrait and landscape orientation.
 
-- Short Text (single-line text)
-- Email (email field)
-- Phone (phone number field)
-- URL (web address)
-- Long Text / Paragraph (multi-line text)
+## 🚀 Quick start
 
-**Numbers & Currency:**
+1. Clone or download this repository.
+2. Open [index.html](index.html) in a modern browser to launch the builder.
+3. Choose a template name, paper size, and orientation.
+4. Drag fields onto the sheet, adjust their properties, and arrange layers.
+5. Download the template JSON as a portable copy.
+6. Choose **Go To Filler**, or open [filler.html](filler.html).
+7. Fill the form, choose export quality, and download PDF, PNG, or JPG.
 
-- Number (numeric input)
-- Currency (money amount)
-- Percentage (percentage value)
+The project is static: no package installation or backend server is required for the basic pages. Use an HTTP server or HTTPS hosting to exercise service worker and PWA behavior. The desktop/laptop layout provides the most room for editing.
 
-**Selection Fields:**
+## 🧩 Supported form objects
 
-- Dropdown / Select (single selection from options)
-- Radio Buttons (exclusive choice)
-- Checkboxes (single or multi-select)
-- Multi-Select (multiple selection from list)
+| Group | Objects |
+|---|---|
+| Layout & structure | Section Header, Divider Line, Constant/Label |
+| Text | Short Text, Email, Phone, URL, Long Text/Paragraph |
+| Numbers | Number, Currency, Percentage |
+| Selection | Dropdown/Select, Radio Buttons, Checkboxes, Multi-Select |
+| Date & time | Date Picker, Time Picker, Date & Time |
+| Files & media | File Upload, Photo Upload |
+| Special | Signature drawing field, Rating (1–10) |
 
-**Date & Time:**
+The filler aligns inputs with the template. Export outputs include constants and filled values; empty fields are omitted from the exported result.
 
-- Date Picker (date only)
-- Time Picker (time only)
-- Date & Time (combined date and time)
+## ⌨️ Keyboard shortcuts
 
-**File & Media:**
+| Action | Windows/Linux | macOS |
+|---|---|---|
+| Remove selected object | Delete or Backspace | Delete or Backspace |
+| Duplicate | Ctrl + D | Cmd + D |
+| Undo | Ctrl + Z | Cmd + Z |
+| Redo | Ctrl + Y | Cmd + Shift + Z |
+| Nudge 1 px | Arrow keys | Arrow keys |
+| Nudge 10 px | Shift + Arrow keys | Shift + Arrow keys |
 
-- File Upload (any file type)
-- Photo Upload (images only)
+## 💾 Templates and browser storage
 
-**Special Fields:**
+- Builder drafts are saved in **localStorage** and restored on reload.
+- The filler reads the latest template from the same browser storage, or accepts a manually uploaded JSON template.
+- Browser data is tied to its browser profile and origin. Export JSON to move templates between devices or retain a backup before clearing browser data.
+- The current project documents a local builder/filler workflow. A hosted submission API and publish/versioning workflow are future work.
 
-- Signature (signature drawing field)
-- Rating (star-based rating, 1-10)
+## 📁 Repository guide
 
-## Keyboard shortcuts (Builder)
+| File | Purpose |
+|---|---|
+| [index.html](index.html), [app.js](app.js), [styles.css](styles.css) | Template builder and canvas controls |
+| [filler.html](filler.html), [filler.js](filler.js), [filler.css](filler.css) | Form entry and export workflow |
+| [manifest.webmanifest](manifest.webmanifest), [pwa.js](pwa.js), [sw.js](sw.js) | Installation and service worker support |
+| [icon.svg](icon.svg) | App icon |
 
-- `Delete` or `Backspace`: remove selected object
-- `Ctrl + D` / `Cmd + D`: duplicate selected object
-- `Ctrl + Z` / `Cmd + Z`: undo
-- `Ctrl + Y` or `Cmd + Shift + Z`: redo
-- `Arrow keys`: nudge selected object by 1px
-- `Shift + Arrow keys`: nudge selected object by 10px
+## 📱 Progressive web app
 
-## Builder Features
+The manifest and service worker provide an installable app shell in compatible browsers, standalone display, configured icon/theme color, and caching for key app files. The existing service worker also supports runtime caching for same-origin files and CDN libraries used by exports.
 
-- **3-column split-pane layout** with draggable dividers
-  - Left: Field Palette with all form element types
-  - Center: Template Sheet canvas with Canva-style drag/drop
-  - Right: Properties panel with Layers
-- **Smart alignment** with guide lines during object movement
-- **Resize handles** on 8 points (corners + edges) for each selected object
-- **Layers panel** with layer ordering (Bring Front, Send Back) and lock/unlock toggles
-- **Full undo/redo history** for all layout changes
-- **Corner drag-to-resize** handles for precise object sizing
-- **Auto-save draft** and restore on page reload
-- **Copy/duplicate objects** with Ctrl+D or Cmd+D
-- **Clear sheet** to start template over
-- **Download template** as JSON file for sharing
+Installation requires a supported browser and HTTPS (or localhost). After deployment, reopen the app and refresh to pick up the latest assets. Export features that depend on CDN libraries may need an initial online visit before those libraries are available offline.
 
-## Filler Features
+## 🌐 Deployment
 
-- **2-column split-pane layout** with draggable info sidebar
-  - Left: Template info (collapsible)
-  - Right: Fill form sheet
-- **Field-specific inputs**
-  - Text inputs for email, phone, URL with native browser validation
-  - Number fields with currency and percentage support
-  - Dropdowns, radio buttons, checkboxes, and multi-select lists
-  - Date and time pickers
-  - File and photo upload fields
-  - Signature canvas (ready for drawing)
-  - Star rating controls
-- **Smart export** (only filled values + constants)
-- **Export formats**: PDF, PNG, JPG
-- **Export quality selector**: Standard, High, Print (300 DPI)
-- **Auto-load template** from builder via local storage
-- **Manual upload** of template JSON files
+Form Studio can be hosted as a static website. For GitHub Pages:
 
-## Form creation essentials to add next
+1. Open repository **Settings → Pages**.
+2. Choose **Deploy from a branch**, then **main** and **/ (root)**.
+3. Save and use the URL provided by GitHub.
 
-- Header/footer areas and reusable sections
-- Validation rules (pattern, min/max, date range)
+The repository's documented Pages path is `https://vignesh-s-github.github.io/Form-Studio/`. Use the actual deployment URL shown in Pages settings; service worker behavior is designed to work under the project path.
+
+## 🔎 Manual review during development
+
+After editing the app, check template creation, save/restore, builder-to-filler navigation, and PDF/PNG/JPG exports at each quality level. Review resizing, layer controls, undo/redo, and keyboard shortcuts. Use a fresh browser reload when cached CSS or JavaScript appears out of date.
+
+## 🛤️ Future improvements
+
+- Reusable sections and header/footer areas
+- Rich validation rules: patterns, ranges, and file limits
 - Conditional logic between fields
-- File limits (size, count, type)
-- Signature block
-- Save draft and publish versioning
-- Filler runtime and submission API
+- Template publishing and version history
+- Submission API and a richer filler runtime
 
-## Run
+---
 
-Open [index.html](index.html) in your browser.
-
-For fill mode, open [filler.html](filler.html).
-
-## Production Readiness Check
-
-- No syntax errors in workspace files (validated in editor)
-- Builder and filler flows linked and working
-- Template and filled-form exports tested (PDF, PNG, JPG)
-- Responsive layout tuned for desktop/laptop usage
-- Split-pane state persistence enabled
-- No temporary debug logs in source files
-- Installable web app (PWA) enabled with manifest + service worker
-
-## Web App Features (PWA)
-
-- Install prompt support in compatible browsers
-- Standalone app display mode
-- App icon and theme color configured
-- Offline-ready shell caching for key app files
-- Runtime caching for same-origin files and CDN libraries used by filler exports
-
-## GitHub Upload Preparation
-
-Before pushing to GitHub, do this quick checklist:
-
-1. Open builder and filler once and verify your latest UI changes.
-2. Hard refresh browser (`Ctrl+F5`) to clear cached CSS/JS.
-3. Confirm exports from filler (PDF/PNG/JPG).
-4. Commit with a clean message such as `feat: production-ready Form Studio builder and filler`.
-
-## Optional GitHub Pages Deploy
-
-This project is static (HTML/CSS/JS), so GitHub Pages works directly.
-
-1. Push repository to GitHub.
-2. Go to repository `Settings` -> `Pages`.
-3. Set Source to `Deploy from a branch`.
-4. Choose branch `main` and folder `/ (root)`.
-5. Save and wait for the Pages URL.
-
-Use the deployed `index.html` as entry point.
-
-## Notes for Existing GitHub Pages URL
-
-If you already published at:
-
-- [https://vignesh-s-github.github.io/Form-Studio/](https://vignesh-s-github.github.io/Form-Studio/)
-
-then PWA install and service worker work under that same path.
-
-After deploying updates, open the app once and hard refresh (`Ctrl+F5`) to activate the new service worker/cache version.
+<p align="center"><sub>From a blank sheet to a reusable form workflow.</sub></p>
