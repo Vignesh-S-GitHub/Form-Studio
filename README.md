@@ -1,14 +1,20 @@
 <div align="center">
 
-# 📝 Form Studio
+<img src="icon.svg" alt="Form Studio logo" width="96" />
 
-### Design a template. Fill it. Export a finished form.
+# Form Studio
 
-**HTML · CSS · JavaScript · Canvas-style editing · PWA**
+**Design a template. Fill it. Export a finished form.**
 
-[Features](#-features) · [Quick start](#-quick-start) · [Field types](#-supported-form-objects) · [Shortcuts](#-keyboard-shortcuts) · [Deployment](#-deployment)
+![JavaScript](https://img.shields.io/badge/JavaScript-B88A00?style=flat-square&logo=javascript&logoColor=white)
+![HTML5](https://img.shields.io/badge/HTML5-E34F26?style=flat-square&logo=html5&logoColor=white)
+![PWA](https://img.shields.io/badge/PWA-5A0FC8?style=flat-square&logo=pwa&logoColor=white)
+
+[Builder](index.html) · [Quick start](#quick-start) · [Filler](filler.html)
 
 </div>
+
+---
 
 Form Studio is a browser-based form template builder with a linked filler page. Place and arrange fields on a paper-sized canvas, save the layout as JSON, then enter values and export the completed form as PDF, PNG, or JPG.
 
@@ -25,6 +31,8 @@ Form Studio is a browser-based form template builder with a linked filler page. 
 | Collapsible, resizable palette and properties panels | Collapsible, resizable template information sidebar |
 
 **Paper sizes:** A5 · A4 · A3 · Letter · Legal · Tabloid · Executive, with portrait and landscape orientation.
+
+<a id="quick-start"></a>
 
 ## 🚀 Quick start
 
@@ -107,6 +115,10 @@ After editing the app, check template creation, save/restore, builder-to-filler 
 - Template publishing and version history
 - Submission API and a richer filler runtime
 
----
+## 🤝 Contributing
 
-<p align="center"><sub>From a blank sheet to a reusable form workflow.</sub></p>
+Open an issue with a reproducible example or submit a focused pull request. Keep setup instructions and documentation aligned with any behavior changes.
+
+## 📄 License
+
+No repository-level `LICENSE` file is currently included.
